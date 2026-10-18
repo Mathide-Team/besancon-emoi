@@ -1,6 +1,5 @@
 # CI du socle Mathide-Team. Le job « Qualité (lint, tests) » est un check
-# requis sur main et dev (.github/branch-protection/*.json) : garder son nom,
-# l'adapter au langage du dépôt (ruff, mypy, pytest, cargo, npm…).
+# requis sur main et dev (.github/branch-protection/*.json) : garder son nom.
 name: CI
 
 "on":
@@ -26,7 +25,8 @@ jobs:
         uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
 
       - name: Installation de Python
-        run: uv python install
+        # 3.13 : dernière version prise en charge par pytest-homeassistant-custom-component figé (pyproject.toml).
+        run: uv python install 3.13
 
       - name: Lint YAML (yamllint --strict)
         run: uvx yamllint==1.38.0 --strict -c .yamllint.yaml .
@@ -34,10 +34,28 @@ jobs:
       - name: Syntaxe des scripts Python
         run: uv run --no-project python -m py_compile scripts/*.py
 
-      - name: Tests (unittest)
+      - name: Lint et format (ruff)
         run: |
-          if [ -d tests ]; then
-            uv run --no-project python -m unittest discover -s tests -v
-          else
-            echo "Pas de dossier tests/ : à ajouter."
-          fi
+          uv run --only-group lint ruff check .
+          uv run --only-group lint ruff format --check .
+
+      - name: Tests (pytest, Home Assistant)
+        run: uv run -p 3.13 --only-group test pytest --cov --cov-report=term-missing
+
+  homeassistant:
+    name: Validation Home Assistant (hassfest, HACS)
+    # Actions Docker : les runners maison n'ont pas tous Docker utilisable (Netcross#936).
+    # Variable RUNS_ON_DOCKER pour les ramener sur un runner maison avec Docker.
+    runs-on: ${{ fromJSON(vars.RUNS_ON_DOCKER || '"ubuntu-latest"') }}
+
+    steps:
+      - name: Checkout du dépôt
+        uses: actions/checkout@v7
+
+      - name: hassfest
+        uses: home-assistant/actions/hassfest@master
+
+      - name: Validation HACS
+        uses: hacs/action@main
+        with:
+          category: integration

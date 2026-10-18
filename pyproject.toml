@@ -1,0 +1,33 @@
+[project]
+name = "besancon-emoi"
+version = "0.1.0"
+description = "Intégration Home Assistant pour le portail Besançon et moi (eau : factures, index, relevés)"
+requires-python = ">=3.13.2,<3.14"
+license = "MIT"
+
+[dependency-groups]
+# Versions figées (socle) : à monter volontairement.
+test = [
+    "beautifulsoup4>=4.12.2",
+    "pytest-homeassistant-custom-component==0.13.316",  # Home Assistant 2026.2.3, Python 3.13
+]
+lint = ["ruff==0.17.1"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.ruff]
+line-length = 110
+target-version = "py313"
+extend-exclude = ["scripts/check_branch_protection.py"]  # script du socle (modele-depot), gardé tel quel
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF"]
+
+[tool.coverage.run]
+source = ["custom_components/besancon_emoi"]
+
+[tool.uv]
+package = false  # intégration HA, pas un paquet Python publié

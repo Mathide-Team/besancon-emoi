@@ -1,0 +1,12 @@
+{
+  "domain": "besancon_emoi",
+  "name": "Besançon et moi",
+  "codeowners": ["@MathildeDec"],
+  "config_flow": true,
+  "documentation": "https://github.com/Mathide-Team/besancon-emoi",
+  "integration_type": "hub",
+  "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/Mathide-Team/besancon-emoi/issues",
+  "requirements": ["beautifulsoup4>=4.12.2"],
+  "version": "0.1.0"
+}
