@@ -15,6 +15,7 @@ from .api import (
     BesanconEmoiClient,
     BesanconEmoiError,
     ContractData,
+    WasteContractData,
 )
 from .const import (
     CONF_AUTO_SUBMIT,
@@ -29,8 +30,9 @@ from .const import (
 _WEEKDAY_NUMBERS = {name: number for number, name in enumerate(WEEKDAYS)}
 
 
-class BesanconEmoiCoordinator(DataUpdateCoordinator[dict[str, ContractData]]):
-    """Récupère les contrats, l'historique d'index et les prélèvements."""
+class BesanconEmoiCoordinator(DataUpdateCoordinator[dict[str, ContractData | WasteContractData]]):
+    """Récupère les contrats d'eau, l'historique d'index, les prélèvements
+    et les pesées de bacs (déchets)."""
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry, client: BesanconEmoiClient) -> None:
         """Initialise le coordinateur."""
@@ -80,7 +82,7 @@ class BesanconEmoiCoordinator(DataUpdateCoordinator[dict[str, ContractData]]):
         except BesanconEmoiError as err:
             msg = f"Portail inaccessible : {err}"
             raise UpdateFailed(msg) from err
-        data: dict[str, ContractData] = {}
+        data: dict[str, ContractData | WasteContractData] = {}
         for contract in contracts:
             key = contract.idcontrat
             try:
@@ -92,23 +94,50 @@ class BesanconEmoiCoordinator(DataUpdateCoordinator[dict[str, ContractData]]):
                 msg = f"Contrat {key} : {err}"
                 raise UpdateFailed(msg) from err
             data[key] = ContractData(contract=contract, index_history=history, bills=bills)
+        # Les déchets sont complémentaires : une erreur côté pesées ne
+        # doit pas empêcher la mise à jour de l'eau.
+        try:
+            waste_contracts = await self.client.async_get_waste_contracts()
+        except BesanconEmoiAuthError as err:
+            raise err
+        except BesanconEmoiError as err:
+            LOGGER.warning("Contrats déchets indisponibles : %s", err)
+            waste_contracts = []
+        for waste_contract in waste_contracts:
+            try:
+                pesees = await self.client.async_get_weighings(waste_contract.idcontrat)
+                pesees_jaune = await self.client.async_get_weighings(waste_contract.idcontrat, jaune=True)
+            except BesanconEmoiAuthError as err:
+                raise err
+            except BesanconEmoiError as err:
+                LOGGER.warning(
+                    "Pesées indisponibles pour le contrat déchets %s : %s",
+                    waste_contract.idcontrat,
+                    err,
+                )
+                continue
+            data[waste_contract.idcontrat] = WasteContractData(
+                contract=waste_contract, pesees=pesees, pesees_jaune=pesees_jaune
+            )
         await self._async_maybe_auto_submit(data)
         return data
 
-    async def _async_maybe_auto_submit(self, data: dict[str, ContractData]) -> None:
+    async def _async_maybe_auto_submit(self, data: dict[str, ContractData | WasteContractData]) -> None:
         """Transmet le relevé une fois par semaine si l'option est active.
 
-        La saisie ne cible qu'un compte à contrat unique : on n'envoie
-        jamais le même index à plusieurs compteurs.
+        La saisie ne cible qu'un compte à contrat d'eau unique : on
+        n'envoie jamais le même index à plusieurs compteurs, et les
+        contrats déchets ne comptent pas.
         """
         if not self.entry.options.get(CONF_AUTO_SUBMIT, False):
             return
-        if len(data) != 1:
-            if data:
+        water_data = {key: value for key, value in data.items() if isinstance(value, ContractData)}
+        if len(water_data) != 1:
+            if water_data:
                 LOGGER.warning(
-                    "Saisie hebdomadaire ignorée : %d contrats sur ce compte "
+                    "Saisie hebdomadaire ignorée : %d contrats d'eau sur ce compte "
                     "(un seul contrat est pris en charge pour l'automatisme)",
-                    len(data),
+                    len(water_data),
                 )
             return
         today = date.today()
@@ -142,7 +171,7 @@ class BesanconEmoiCoordinator(DataUpdateCoordinator[dict[str, ContractData]]):
         if index < 0:
             msg = f"Index négatif refusé sur {entity_id} : {state.state}"
             raise UpdateFailed(msg)
-        contract_data = next(iter(data.values()))
+        contract_data = next(iter(water_data.values()))
         contract = contract_data.contract
         try:
             await self.client.async_submit_index(

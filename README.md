@@ -19,6 +19,13 @@ facture à partir de l'index publié ici).
   - **Dernier prélèvement** (€) : montant prélevé par le portail
     (mensualité ou ajustement annuel — ce n'est pas le total de la facture),
     avec date, n° de facture et lien du PDF en attributs.
+- Par contrat déchets (bac roulant) :
+  - **Dernière pesée** et **Poids de la dernière pesée** (kg), avec type de
+    bac, volume, nombre de vidages, n° de bac et n° de puce en attributs ;
+  - **Dernière pesée bac jaune** et **Poids de la dernière pesée bac jaune**
+    (kg) pour les bacs recyclables ;
+  - la liste des **20 dernières pesées** en attribut de chaque capteur ;
+  - la table du portail est paginée : toutes les pages sont lues.
 - Action `besancon_emoi.saisir_index` pour transmettre un relevé de compteur,
   avec ciblage par contrat quand plusieurs compteurs sont configurés.
 - **Saisie hebdomadaire automatique** : l'index est lu sur une entité de

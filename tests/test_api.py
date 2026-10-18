@@ -13,6 +13,7 @@ from custom_components.besancon_emoi.api import (
     BesanconEmoiAuthError,
     BesanconEmoiClient,
     BesanconEmoiError,
+    WasteContract,
 )
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -55,7 +56,10 @@ def _build_app() -> web.Application:
                 text=(FIXTURES / "login.html").read_text(),
                 content_type="text/html",
             )
-        return web.Response(text="<html><body>Accueil</body></html>")
+        return web.Response(
+            text=(FIXTURES / "accueil.html").read_text(),
+            content_type="text/html",
+        )
 
     def _guarded(name: str, request: web.Request) -> web.Response:
         if not _authentifie(request):
@@ -76,6 +80,18 @@ def _build_app() -> web.Application:
 
     async def facturesajax(request: web.Request) -> web.Response:
         return _guarded("facturesajax.html", request)
+
+    async def dechets_index(request: web.Request) -> web.Response:
+        return _guarded("dechets_index.html", request)
+
+    async def pesees(request: web.Request) -> web.Response:
+        return _guarded("pesees.html", request)
+
+    async def pesees_page(request: web.Request) -> web.Response:
+        return _guarded("pesees_page2.html", request)
+
+    async def peseesjaune(request: web.Request) -> web.Response:
+        return _guarded("peseesjaune.html", request)
 
     async def submit(request: web.Request) -> web.Response:
         if not _authentifie(request):
@@ -102,6 +118,10 @@ def _build_app() -> web.Application:
     app.router.add_get("/prestations/eau/saisie/idcontrat/{rest:.*}", saisie_form)
     app.router.add_get("/prestations/eau/index/abo/{abo}", index_abo)
     app.router.add_get("/prestations/eau/facturesajax/abo/{abo}", facturesajax)
+    app.router.add_get("/prestations/dechets/index/abo/{abo}", dechets_index)
+    app.router.add_get("/prestations/dechets/pesees/id/{idcontrat}", pesees)
+    app.router.add_get("/prestations/dechets/pesees/id/{idcontrat}/page/{page}", pesees_page)
+    app.router.add_get("/prestations/dechets/peseesjaune/id/{idcontrat}", peseesjaune)
     app.router.add_post("/prestations/eau/saisie/idcontrat/{rest:.*}", submit)
     app.router.add_get("/prestations/eau/formulaires/idcontrat/{rest:.*}", formulaires)
     app.router.add_get("/index/logout", logout)
@@ -278,3 +298,57 @@ async def test_deux_comptes_sessions_independantes() -> None:
     finally:
         await client_a.close()
         await client_b.close()
+
+
+async def test_dechets_contrats() -> None:
+    """Les contrats déchets sont découverts via l'accueil puis l'index déchets."""
+    client, api = await _make_client(logged_in=True)
+    try:
+        contracts = await api.async_get_waste_contracts()
+        assert contracts == [WasteContract(idcontrat="333333-04", abo="88888")]
+    finally:
+        await client.close()
+
+
+async def test_pesees_toutes_pages() -> None:
+    """Les pesées des deux pages sont lues, total et note exclus."""
+    client, api = await _make_client(logged_in=True)
+    try:
+        weighings = await api.async_get_weighings("333333-04")
+        # 3 lignes en page 1 + 2 lignes en page 2 (le total et la note
+        # de la page 1 ne sont pas des pesées).
+        assert len(weighings) == 5
+        first = weighings[0]
+        assert first.date == date(2026, 10, 5)
+        assert first.heure == "05h42"
+        assert first.poids_kg == 25.5
+        assert first.type_bac == "Résiduel"
+        assert first.volume_l == 140
+        assert first.vidages == 1
+        assert first.no_bac == "700111"
+        assert first.no_puce == "1A2B3C4D5E"
+        assert weighings[-1].date == date(2026, 8, 11)
+    finally:
+        await client.close()
+
+
+async def test_pesees_jaune() -> None:
+    """La liste jaune (recyclable) est lue séparément."""
+    client, api = await _make_client(logged_in=True)
+    try:
+        weighings = await api.async_get_weighings("333333-04", jaune=True)
+        assert len(weighings) == 2
+        assert weighings[0].type_bac == "Recyclable"
+        assert weighings[0].poids_kg == 11.5
+    finally:
+        await client.close()
+
+
+async def test_pesees_session_expiree() -> None:
+    """Sans session, la lecture des pesées échoue en erreur d'authentification."""
+    client, api = await _make_client()
+    try:
+        with pytest.raises(BesanconEmoiAuthError):
+            await api.async_get_weighings("333333-04")
+    finally:
+        await client.close()
