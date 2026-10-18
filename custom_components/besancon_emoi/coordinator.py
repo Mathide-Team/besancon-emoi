@@ -19,22 +19,34 @@ from .api import (
 )
 from .const import (
     CONF_AUTO_SUBMIT,
+    CONF_COMMUNE,
     CONF_INDEX_ENTITY,
+    CONF_NUMERO,
+    CONF_RUE,
     CONF_SUBMIT_WEEKDAY,
     DEFAULT_UPDATE_INTERVAL_MIN,
     DOMAIN,
     LOGGER,
     WEEKDAYS,
 )
+from .opendata import CollecteData, GrandBesanconOpendataClient, OpendataError
 
 _WEEKDAY_NUMBERS = {name: number for number, name in enumerate(WEEKDAYS)}
 
+_Donnees = dict[str, ContractData | WasteContractData | CollecteData]
 
-class BesanconEmoiCoordinator(DataUpdateCoordinator[dict[str, ContractData | WasteContractData]]):
-    """Récupère les contrats d'eau, l'historique d'index, les prélèvements
-    et les pesées de bacs (déchets)."""
 
-    def __init__(self, hass: HomeAssistant, entry: ConfigEntry, client: BesanconEmoiClient) -> None:
+class BesanconEmoiCoordinator(DataUpdateCoordinator[_Donnees]):
+    """Récupère les contrats d'eau, l'historique d'index, les prélèvements,
+    les pesées de bacs (déchets) et le calendrier de collecte."""
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        entry: ConfigEntry,
+        client: BesanconEmoiClient,
+        opendata: GrandBesanconOpendataClient | None = None,
+    ) -> None:
         """Initialise le coordinateur."""
         super().__init__(
             hass,
@@ -44,6 +56,7 @@ class BesanconEmoiCoordinator(DataUpdateCoordinator[dict[str, ContractData | Was
         )
         self.entry = entry
         self.client = client
+        self.opendata = opendata
         # Date du dernier relevé transmis automatiquement (persistée).
         self._last_auto_submit: date | None = _parse_iso(entry.options.get("last_auto_submit"))
 
@@ -73,7 +86,7 @@ class BesanconEmoiCoordinator(DataUpdateCoordinator[dict[str, ContractData | Was
                 msg = "Session toujours refusée après reconnexion"
                 raise UpdateFailed(msg) from retry_err
 
-    async def _async_fetch_data(self) -> dict[str, ContractData]:
+    async def _async_fetch_data(self) -> _Donnees:
         """Interroge le portail pour tous les contrats."""
         try:
             contracts = await self.client.async_get_contracts()
@@ -82,7 +95,7 @@ class BesanconEmoiCoordinator(DataUpdateCoordinator[dict[str, ContractData | Was
         except BesanconEmoiError as err:
             msg = f"Portail inaccessible : {err}"
             raise UpdateFailed(msg) from err
-        data: dict[str, ContractData | WasteContractData] = {}
+        data: _Donnees = {}
         for contract in contracts:
             key = contract.idcontrat
             try:
@@ -119,10 +132,35 @@ class BesanconEmoiCoordinator(DataUpdateCoordinator[dict[str, ContractData | Was
             data[waste_contract.idcontrat] = WasteContractData(
                 contract=waste_contract, pesees=pesees, pesees_jaune=pesees_jaune
             )
+        # Calendrier de collecte (open data, sans rapport avec la session
+        # du portail) : une erreur ici ne doit pas casser le reste.
+        await self._async_maybe_fetch_collecte(data)
         await self._async_maybe_auto_submit(data)
         return data
 
-    async def _async_maybe_auto_submit(self, data: dict[str, ContractData | WasteContractData]) -> None:
+    async def _async_maybe_fetch_collecte(self, data: _Donnees) -> None:
+        """Récupère le calendrier de collecte si une rue est configurée."""
+        commune = self.entry.options.get(CONF_COMMUNE)
+        rue = self.entry.options.get(CONF_RUE)
+        if not commune or not rue or self.opendata is None:
+            return
+        try:
+            adresses = await self.opendata.async_get_collecte(
+                commune, rue, self.entry.options.get(CONF_NUMERO) or None
+            )
+        except OpendataError as err:
+            LOGGER.warning("Calendrier de collecte indisponible : %s", err)
+            return
+        if not adresses:
+            LOGGER.warning(
+                "Calendrier de collecte vide pour la commune %s et la rue %s",
+                commune,
+                rue,
+            )
+            return
+        data["collecte"] = CollecteData(commune=commune, rue=rue, adresses=adresses)
+
+    async def _async_maybe_auto_submit(self, data: _Donnees) -> None:
         """Transmet le relevé une fois par semaine si l'option est active.
 
         La saisie ne cible qu'un compte à contrat d'eau unique : on

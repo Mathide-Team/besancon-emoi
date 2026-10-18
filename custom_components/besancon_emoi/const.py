@@ -18,6 +18,11 @@ CONF_AUTO_SUBMIT = "auto_submit"
 CONF_SUBMIT_WEEKDAY = "submit_weekday"
 CONF_INDEX_ENTITY = "index_entity"
 
+# Calendrier de collecte des déchets (open data Grand Besançon).
+CONF_COMMUNE = "collecte_commune"
+CONF_RUE = "collecte_rue"
+CONF_NUMERO = "collecte_numero"
+
 DEFAULT_UPDATE_INTERVAL_MIN = 360  # 6 h
 WEEKDAYS = [
     "lundi",

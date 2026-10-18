@@ -1,0 +1,22 @@
+<!DOCTYPE html><html lang="fr"><body>
+<h1>Jours de collecte des déchets par adresse - OpenData Besançon</h1>
+<form action="" name="" id="frmDechBesJC" method="post">
+<p>Indiquez l'adresse recherchée pour connaître ses jours de collecte des déchets</p>
+<div><label for="commune">Commune *</label>
+<select class="form-select" id="commune" name="commune" required>
+<option value="">Choisir ...</option>
+<option value="25056">Besançon</option>
+<option value="25112">Chalezeule</option>
+<option value="25999">Ville de Test</option>
+</select></div>
+<div><label for="rue">Rue *</label>
+<select class="form-select" id="rue" name="rue" required>
+<option value="" selected>Choisir ...</option>
+<option value="0042">Impasse de Test</option>
+<option value="0007">Rue Fictive</option>
+</select></div>
+<div><label for="numero">Numéro</label>
+<input type="number" class="form-control" id="numero" name="numero" value=""></div>
+<button type="submit" id="rechercher" name="rechercher" class="btn btn-info">Rechercher</button>
+</form>
+</body></html>
