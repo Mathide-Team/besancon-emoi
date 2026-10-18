@@ -18,7 +18,12 @@ facture à partir de l'index publié ici).
   - **Consommation moyenne journalière** (m³/j) ;
   - **Dernier prélèvement** (€) : montant prélevé par le portail
     (mensualité ou ajustement annuel — ce n'est pas le total de la facture),
-    avec date, n° de facture et lien du PDF en attributs.
+    avec date, n° de facture et lien du PDF en attributs ;
+  - **Dernière facture (TTC)** (€) : total TTC lu dans le PDF de la
+    dernière facture (le portail ne le publie pas), avec date,
+    n° de facture et montant prélevé en attributs. Le PDF est téléchargé
+    une seule fois par facture ; s'il est inaccessible ou illisible, le
+    capteur reste inconnu et la mise à jour continue.
 - Par contrat déchets (bac roulant) :
   - **Dernière pesée** et **Poids de la dernière pesée** (kg), avec type de
     bac, volume, nombre de vidages, n° de bac et n° de puce en attributs ;

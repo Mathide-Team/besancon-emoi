@@ -47,6 +47,8 @@ class Bill:
 
     La colonne « Montant » du portail est le montant prélevé
     (mensualité ou ajustement annuel), pas le total de la facture.
+    Le total TTC, lu dans le PDF de la facture, est renseigné par le
+    coordinateur (une facture n'est téléchargée qu'une fois par session).
     """
 
     facture: str
@@ -54,6 +56,7 @@ class Bill:
     contrat: str
     montant_preleve: float | None
     pdf_path: str | None
+    total_ttc: float | None = None
 
 
 @dataclass

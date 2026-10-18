@@ -71,6 +71,9 @@
       "dernier_prelevement": {
         "name": "Dernier prélèvement"
       },
+      "derniere_facture_ttc": {
+        "name": "Dernière facture (TTC)"
+      },
       "pesee_derniere": {
         "name": "Dernière pesée"
       },

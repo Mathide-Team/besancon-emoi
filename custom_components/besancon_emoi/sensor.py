@@ -94,6 +94,13 @@ SENSORS: dict[str, BesanconEmoiSensorDescription] = {
         device_class=SensorDeviceClass.MONETARY,
         suggested_display_precision=2,
     ),
+    "derniere_facture_ttc": BesanconEmoiSensorDescription(
+        key="derniere_facture_ttc",
+        translation_key="derniere_facture_ttc",
+        native_unit_of_measurement=CURRENCY_EURO,
+        device_class=SensorDeviceClass.MONETARY,
+        suggested_display_precision=2,
+    ),
 }
 
 
@@ -341,6 +348,12 @@ class BesanconEmoiSensorEntity(CoordinatorEntity[BesanconEmoiCoordinator], Senso
             if not data.bills:
                 return None
             return data.bills[0].montant_preleve
+        if self._sensor_key == "derniere_facture_ttc":
+            if not data.bills:
+                return None
+            # Total lu dans le PDF de la facture : inconnu si le PDF
+            # n'a pas pu être téléchargé ou lu lors de la mise à jour.
+            return data.bills[0].total_ttc
         return None
 
     @property
@@ -368,7 +381,15 @@ class BesanconEmoiSensorEntity(CoordinatorEntity[BesanconEmoiCoordinator], Senso
                     "facture": b.facture,
                     "date": b.date.isoformat() if b.date else None,
                     "montant_preleve": b.montant_preleve,
+                    "total_ttc": b.total_ttc,
                 }
                 for b in data.bills[:10]
             ]
+        if self._sensor_key == "derniere_facture_ttc" and data.bills:
+            latest_bill = data.bills[0]
+            attributes["facture"] = latest_bill.facture
+            attributes["date_facture"] = latest_bill.date.isoformat() if latest_bill.date else None
+            attributes["montant_preleve"] = latest_bill.montant_preleve
+            # Lien relatif du PDF de la facture sur le portail.
+            attributes["lien_facture"] = latest_bill.pdf_path
         return attributes
