@@ -1,0 +1,97 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "description": "Identifiants de votre espace « Besançon et moi » (besancon-emoi.fr).",
+        "data": {
+          "email": "Adresse e-mail",
+          "password": "Mot de passe"
+        }
+      },
+      "reauth_confirm": {
+        "description": "Le portail a refusé la connexion. Saisissez à nouveau vos identifiants.",
+        "data": {
+          "email": "Adresse e-mail",
+          "password": "Mot de passe"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Impossible de se connecter au portail.",
+      "invalid_auth": "Identifiants refusés par le portail."
+    },
+    "abort": {
+      "reauth_successful": "Ré-authentification réussie."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "description": "Saisie hebdomadaire automatique du relevé : l'index est lu sur une entité (par exemple le compteur wM-Bus) et transmis au portail une fois par semaine. La commune sert au calendrier de collecte des déchets (open data).",
+        "data": {
+          "auto_submit": "Saisie hebdomadaire automatique",
+          "submit_weekday": "Jour de la semaine",
+          "index_entity": "Entité source de l'index (entity_id)",
+          "collecte_commune": "Commune (calendrier de collecte)"
+        }
+      },
+      "collecte": {
+        "description": "Calendrier de collecte des déchets (open data Grand Besançon) : choisissez votre rue et, si le calendrier dépend du numéro, votre numéro.",
+        "data": {
+          "collecte_rue": "Rue",
+          "collecte_numero": "Numéro (facultatif)"
+        }
+      }
+    }
+  },
+  "services": {
+    "saisir_index": {
+      "name": "Saisir le relevé de compteur",
+      "description": "Transmet un relevé d'index de compteur d'eau au portail Besançon et moi.",
+      "fields": {
+        "index": {
+          "name": "Index",
+          "description": "Nouvelle valeur lue sur le compteur (m³)."
+        },
+        "date_releve": {
+          "name": "Date du relevé",
+          "description": "Date de la lecture du compteur (par défaut : aujourd'hui)."
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "index": {
+        "name": "Index du compteur"
+      },
+      "conso_moyenne": {
+        "name": "Consommation moyenne journalière"
+      },
+      "dernier_prelevement": {
+        "name": "Dernier prélèvement"
+      },
+      "derniere_facture_ttc": {
+        "name": "Dernière facture (TTC)"
+      },
+      "pesee_derniere": {
+        "name": "Dernière pesée"
+      },
+      "pesee_derniere_poids": {
+        "name": "Poids de la dernière pesée"
+      },
+      "pesee_jaune_derniere": {
+        "name": "Dernière pesée bac jaune"
+      },
+      "pesee_jaune_derniere_poids": {
+        "name": "Poids de la dernière pesée bac jaune"
+      },
+      "collecte_residuels": {
+        "name": "Collecte résiduels"
+      },
+      "collecte_recyclables": {
+        "name": "Collecte recyclables"
+      }
+    }
+  }
+}

@@ -1,0 +1,71 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "description": "Credentials for your “Besançon et moi” account (besancon-emoi.fr).",
+        "data": {
+          "email": "E-mail address",
+          "password": "Password"
+        }
+      },
+      "reauth_confirm": {
+        "description": "The portal rejected the connection. Enter your credentials again.",
+        "data": {
+          "email": "E-mail address",
+          "password": "Password"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Could not connect to the portal.",
+      "invalid_auth": "Credentials rejected by the portal."
+    },
+    "abort": {
+      "reauth_successful": "Re-authentication was successful."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "description": "Automatic weekly meter reading submission: the index is read from an entity (e.g. the wM-Bus meter) and submitted to the portal once a week.",
+        "data": {
+          "auto_submit": "Automatic weekly submission",
+          "submit_weekday": "Day of the week",
+          "index_entity": "Index source entity (entity_id)"
+        }
+      }
+    }
+  },
+  "services": {
+    "saisir_index": {
+      "name": "Submit meter reading",
+      "description": "Submits a water meter index reading to the Besançon et moi portal.",
+      "fields": {
+        "index": {
+          "name": "Index",
+          "description": "New value read on the meter (m³)."
+        },
+        "date_releve": {
+          "name": "Reading date",
+          "description": "Date of the meter reading (default: today)."
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "index": {
+        "name": "Meter index"
+      },
+      "conso_moyenne": {
+        "name": "Average daily consumption"
+      },
+      "dernier_prelevement": {
+        "name": "Latest direct debit"
+      },
+      "derniere_facture_ttc": {
+        "name": "Latest bill (incl. VAT)"
+      }
+    }
+  }
+}

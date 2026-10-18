@@ -1,0 +1,32 @@
+saisir_index:
+  name: Saisir le relevé de compteur
+  description: >-
+    Transmet un relevé d'index de compteur d'eau au portail Besançon et moi,
+    pour tous les contrats configurés.
+  fields:
+    index:
+      name: Index
+      description: Nouvelle valeur lue sur le compteur (m³).
+      required: true
+      example: "322"
+      selector:
+        number:
+          min: 0
+          max: 9999999
+          step: 1
+    date_releve:
+      name: Date du relevé
+      description: "Date de la lecture du compteur (par défaut : aujourd'hui)."
+      required: false
+      selector:
+        date: {}
+    contrat:
+      name: Contrat visé
+      description: >
+        Identifiant du contrat (idcontrat, par ex. 123456-02). Obligatoire si
+        plusieurs contrats sont configurés : l'index n'est jamais envoyé à
+        plusieurs compteurs à la fois.
+      required: false
+      example: "123456-02"
+      selector:
+        text: {}
