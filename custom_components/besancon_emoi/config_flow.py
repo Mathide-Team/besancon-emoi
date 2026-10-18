@@ -11,10 +11,11 @@ from homeassistant.const import CONF_EMAIL, CONF_PASSWORD
 from homeassistant.core import callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from .api import BesanconEmoiAuthError, BesanconEmoiClient, BesanconEmoiError
+from .api import BesanconEmoiAuthError, BesanconEmoiClient, BesanconEmoiError, ContractData
 from .const import (
     CONF_AUTO_SUBMIT,
     CONF_COMMUNE,
+    CONF_INDEX_ENTITIES,
     CONF_INDEX_ENTITY,
     CONF_NUMERO,
     CONF_RUE,
@@ -105,7 +106,10 @@ class BesanconEmoiOptionsFlow(OptionsFlow):
         """Première étape : options de saisie et commune de collecte."""
         errors: dict[str, str] = {}
         if user_input is not None:
-            self._partiel = dict(user_input)
+            # Les champs « index_entity::<contrat> » sont repliés dans
+            # l'appariement « index_entities » (contrat → entité).
+            self._partiel = {k: v for k, v in user_input.items() if "::" not in k}
+            self._partiel[CONF_INDEX_ENTITIES] = self._assembler_index_entities(user_input)
             return await self.async_step_collecte()
         current = dict(self.config_entry.options)
         communes = await self._async_get_communes()
@@ -115,6 +119,15 @@ class BesanconEmoiOptionsFlow(OptionsFlow):
             validateur_commune: Any = str
         else:
             validateur_commune = vol.In({c.insee: c.nom for c in communes} | {"": "— Aucune —"})
+        # Un champ « index_entity::<contrat> » par contrat d'eau connu :
+        # l'appariement explicite permet la saisie hebdomadaire sur un
+        # compte à plusieurs contrats (chaque compteur a sa source).
+        champs_par_contrat: dict[Any, Any] = {}
+        courant = dict(current.get(CONF_INDEX_ENTITIES) or {})
+        for idcontrat in self._contrats_eau():
+            champs_par_contrat[
+                vol.Optional(f"{CONF_INDEX_ENTITY}::{idcontrat}", default=courant.get(idcontrat, ""))
+            ] = str
         schema = vol.Schema(
             {
                 vol.Optional(CONF_AUTO_SUBMIT, default=current.get(CONF_AUTO_SUBMIT, False)): bool,
@@ -123,10 +136,28 @@ class BesanconEmoiOptionsFlow(OptionsFlow):
                     default=current.get(CONF_SUBMIT_WEEKDAY, "lundi"),
                 ): vol.In(WEEKDAYS),
                 vol.Optional(CONF_INDEX_ENTITY, default=current.get(CONF_INDEX_ENTITY, "")): str,
+                **champs_par_contrat,
                 champ_commune: validateur_commune,
             }
         )
         return self.async_show_form(step_id="init", data_schema=schema, errors=errors)
+
+    def _assembler_index_entities(self, user_input: dict[str, Any]) -> dict[str, str]:
+        """Replie les champs par contrat en appariement contrat → entité."""
+        prefixe = f"{CONF_INDEX_ENTITY}::"
+        return {
+            key[len(prefixe) :]: value
+            for key, value in user_input.items()
+            if key.startswith(prefixe) and value
+        }
+
+    def _contrats_eau(self) -> list[str]:
+        """Contrats d'eau connus du coordinateur (pour l'appariement)."""
+        runtime = getattr(self.config_entry, "runtime_data", None)
+        data = getattr(runtime, "data", None)
+        if not isinstance(data, Mapping):
+            return []
+        return sorted(key for key, value in data.items() if isinstance(value, ContractData))
 
     async def async_step_collecte(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Deuxième étape : rue et numéro pour le calendrier de collecte."""

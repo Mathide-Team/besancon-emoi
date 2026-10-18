@@ -75,6 +75,11 @@ Copiez `custom_components/besancon_emoi` dans votre dossier `config/custom_compo
 - **Jour de la semaine** : jour d'envoi du relevé.
 - **Entité source de l'index** : `entity_id` du capteur qui publie l'index
   absolu du compteur (en m³).
+- **Entité source par contrat** (comptes à plusieurs contrats d'eau) : un
+  champ « index_entity::<contrat> » par contrat connu ; la saisie
+  hebdomadaire transmet à chaque compteur l'index de sa propre entité.
+  Sans appariement, l'automatisme reste limité au compte à contrat unique
+  (jamais le même index envoyé à plusieurs compteurs).
 
 ### Exemple d'automatisation (saisie manuelle hebdomadaire)
 
@@ -101,10 +106,11 @@ automation:
 - La facture reste disponible en PDF sur le portail ; l'intégration publie
   le montant prélevé et les dates, pas le document (le lien relatif du PDF
   est fourni en attribut du capteur).
-- La saisie hebdomadaire automatique ne cible qu'un compte à contrat unique :
-  avec plusieurs contrats, l'automatisme est ignoré (jamais le même index
-  envoyé à plusieurs compteurs) et l'action manuelle exige le champ
-  « contrat ».
+- La saisie hebdomadaire automatique prend en charge plusieurs contrats
+  d'eau via l'appariement explicite « contrat → entité source » dans les
+  options (un champ par contrat) ; sans appariement, elle ne cible qu'un
+  compte à contrat unique (jamais le même index envoyé à plusieurs
+  compteurs) et l'action manuelle exige le champ « contrat ».
 - L'entité source d'index doit publier l'index **absolu** du compteur en m³
   (pas une consommation périodique ni des litres).
 - Le mot de passe du portail est stocké par Home Assistant comme pour toute

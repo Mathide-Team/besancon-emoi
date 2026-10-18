@@ -6,7 +6,7 @@ from datetime import date, datetime, timedelta
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_EMAIL, CONF_PASSWORD
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, State
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
@@ -20,6 +20,7 @@ from .api import (
 from .const import (
     CONF_AUTO_SUBMIT,
     CONF_COMMUNE,
+    CONF_INDEX_ENTITIES,
     CONF_INDEX_ENTITY,
     CONF_NUMERO,
     CONF_RUE,
@@ -205,20 +206,28 @@ class BesanconEmoiCoordinator(DataUpdateCoordinator[_Donnees]):
     async def _async_maybe_auto_submit(self, data: _Donnees) -> None:
         """Transmet le relevé une fois par semaine si l'option est active.
 
-        La saisie ne cible qu'un compte à contrat d'eau unique : on
-        n'envoie jamais le même index à plusieurs compteurs, et les
-        contrats déchets ne comptent pas.
+        Un compte à plusieurs contrats d'eau est pris en charge par
+        appariement explicite contrat → entité source (option
+        « index_entities ») : chaque compteur reçoit son propre index. Sans
+        appariement, seul un compte à contrat unique utilise l'entité
+        source unique — on n'envoie jamais le même index à plusieurs
+        compteurs, et les contrats déchets ne comptent pas.
         """
         if not self.entry.options.get(CONF_AUTO_SUBMIT, False):
             return
         water_data = {key: value for key, value in data.items() if isinstance(value, ContractData)}
-        if len(water_data) != 1:
-            if water_data:
+        if not water_data:
+            return
+        correspondances = self._entites_par_contrat(water_data)
+        if not correspondances:
+            if len(water_data) > 1:
                 LOGGER.warning(
                     "Saisie hebdomadaire ignorée : %d contrats d'eau sur ce compte "
-                    "(un seul contrat est pris en charge pour l'automatisme)",
+                    "sans appariement contrat → entité (option « index_entities »)",
                     len(water_data),
                 )
+            else:
+                LOGGER.warning("Saisie hebdomadaire active sans entité source d'index")
             return
         today = date.today()
         weekday = _WEEKDAY_NUMBERS.get(self.entry.options.get(CONF_SUBMIT_WEEKDAY, "lundi"), 0)
@@ -226,49 +235,87 @@ class BesanconEmoiCoordinator(DataUpdateCoordinator[_Donnees]):
             return
         if self._last_auto_submit is not None and (today - self._last_auto_submit).days < 6:
             return
-        entity_id = self.entry.options.get(CONF_INDEX_ENTITY)
-        if not entity_id:
-            LOGGER.warning("Saisie hebdomadaire active sans entité source d'index")
-            return
-        state = self.hass.states.get(entity_id)
-        if state is None or state.state in ("unknown", "unavailable"):
-            LOGGER.warning("Entité source d'index indisponible : %s", entity_id)
-            return
-        # L'entité doit publier l'index absolu en m³ : des litres seraient
-        # transmis comme un index m³ et fausseraient la facturation.
-        unite = state.attributes.get("unit_of_measurement")
-        if unite and unite.strip().lower() in ("l", "litre", "litres"):
-            msg = (
-                f"Entité {entity_id} en litres : l'index absolu en m³ est requis "
-                "(aucune conversion automatique)"
+        unique = len(water_data) == 1
+        envois = 0
+        for idcontrat, entity_id in correspondances.items():
+            contract = water_data[idcontrat].contract
+            state = self.hass.states.get(entity_id)
+            if state is None or state.state in ("unknown", "unavailable"):
+                LOGGER.warning("Entité source d'index indisponible : %s", entity_id)
+                continue
+            try:
+                index = _index_valide(entity_id, state)
+            except UpdateFailed as err:
+                if unique:
+                    raise
+                # Plusieurs contrats : un relevé non exploitable ne doit pas
+                # empêcher l'envoi des autres.
+                LOGGER.warning("Saisie hebdomadaire du contrat %s ignorée : %s", idcontrat, err)
+                continue
+            try:
+                await self.client.async_submit_index(
+                    idcontrat,
+                    contract.abo,
+                    index,
+                    date_releve=today,
+                    last_index=contract.last_index,
+                )
+            except BesanconEmoiError as err:
+                if unique:
+                    msg = f"Saisie hebdomadaire impossible : {err}"
+                    raise UpdateFailed(msg) from err
+                LOGGER.warning("Saisie hebdomadaire du contrat %s impossible : %s", idcontrat, err)
+                continue
+            envois += 1
+        if envois:
+            self._last_auto_submit = today
+            self.hass.config_entries.async_update_entry(
+                self.entry,
+                options={**self.entry.options, "last_auto_submit": today.isoformat()},
             )
-            raise UpdateFailed(msg)
-        try:
-            index = int(float(state.state))
-        except ValueError as err:
-            msg = f"Valeur non numérique sur {entity_id} : {state.state}"
-            raise UpdateFailed(msg) from err
-        if index < 0:
-            msg = f"Index négatif refusé sur {entity_id} : {state.state}"
-            raise UpdateFailed(msg)
-        contract_data = next(iter(water_data.values()))
-        contract = contract_data.contract
-        try:
-            await self.client.async_submit_index(
-                contract.idcontrat,
-                contract.abo,
-                index,
-                date_releve=today,
-                last_index=contract.last_index,
-            )
-        except BesanconEmoiError as err:
-            msg = f"Saisie hebdomadaire impossible : {err}"
-            raise UpdateFailed(msg) from err
-        self._last_auto_submit = today
-        self.hass.config_entries.async_update_entry(
-            self.entry,
-            options={**self.entry.options, "last_auto_submit": today.isoformat()},
+
+    def _entites_par_contrat(self, water_data: dict[str, ContractData]) -> dict[str, str]:
+        """Appariement contrat d'eau → entité source d'index.
+
+        L'appariement explicite (option « index_entities ») prime ; sans
+        appariement, l'entité unique sert de repli pour un compte à contrat
+        unique seulement.
+        """
+        declarees = {
+            key: value
+            for key, value in (self.entry.options.get(CONF_INDEX_ENTITIES) or {}).items()
+            if value and key in water_data
+        }
+        if declarees:
+            return declarees
+        if len(water_data) == 1:
+            entity_id = self.entry.options.get(CONF_INDEX_ENTITY)
+            if entity_id:
+                return {next(iter(water_data)): entity_id}
+        return {}
+
+
+def _index_valide(entity_id: str, state: State) -> int:
+    """Valide l'index absolu publié par une entité, ou lève UpdateFailed.
+
+    L'entité doit publier l'index absolu en m³ : des litres seraient
+    transmis comme un index m³ et fausseraient la facturation.
+    """
+    unite = state.attributes.get("unit_of_measurement")
+    if unite and unite.strip().lower() in ("l", "litre", "litres"):
+        msg = (
+            f"Entité {entity_id} en litres : l'index absolu en m³ est requis (aucune conversion automatique)"
         )
+        raise UpdateFailed(msg)
+    try:
+        index = int(float(state.state))
+    except ValueError as err:
+        msg = f"Valeur non numérique sur {entity_id} : {state.state}"
+        raise UpdateFailed(msg) from err
+    if index < 0:
+        msg = f"Index négatif refusé sur {entity_id} : {state.state}"
+        raise UpdateFailed(msg)
+    return index
 
 
 def _parse_iso(value: str | None) -> date | None:
