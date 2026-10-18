@@ -22,8 +22,9 @@ from .api import (
 )
 from .const import DOMAIN, LOGGER
 from .coordinator import BesanconEmoiCoordinator
+from .opendata import GrandBesanconOpendataClient
 
-PLATFORMS: list[Platform] = [Platform.SENSOR]
+PLATFORMS: list[Platform] = [Platform.CALENDAR, Platform.SENSOR]
 
 type BesanconEmoiConfigEntry = ConfigEntry[dict[str, ContractData]]
 
@@ -46,7 +47,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: BesanconEmoiConfigEntry)
         await client.close()
         msg = f"Portail inaccessible : {err}"
         raise ConfigEntryNotReady(msg) from err
-    coordinator = BesanconEmoiCoordinator(hass, entry, client)
+    coordinator = BesanconEmoiCoordinator(hass, entry, client, GrandBesanconOpendataClient(session))
     try:
         await coordinator.async_config_entry_first_refresh()
     except Exception:

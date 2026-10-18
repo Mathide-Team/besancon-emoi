@@ -79,6 +79,8 @@ async def test_options(hass: HomeAssistant) -> None:
     mock_entry.add_to_hass(hass)
     result = await hass.config_entries.options.async_init(mock_entry.entry_id)
     assert result["type"] is FlowResultType.FORM
+    # Première étape : options de saisie + commune (liste indisponible
+    # dans les tests : le champ reste un texte libre).
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
         {
@@ -88,5 +90,13 @@ async def test_options(hass: HomeAssistant) -> None:
         },
     )
     await hass.async_block_till_done()
+    # Deuxième étape : rue de collecte — vide, pas de calendrier.
+    assert result["type"] is FlowResultType.FORM
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {"collecte_rue": ""},
+    )
+    await hass.async_block_till_done()
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert mock_entry.options[CONF_AUTO_SUBMIT] is True
+    assert mock_entry.options["collecte_rue"] == ""

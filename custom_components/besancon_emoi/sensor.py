@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, tzinfo
+from datetime import date, datetime, tzinfo
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from homeassistant.components.sensor import (
@@ -22,11 +22,24 @@ from . import BesanconEmoiConfigEntry
 from .api import ContractData, WasteContractData
 from .const import DOMAIN, MANUFACTURER
 from .coordinator import BesanconEmoiCoordinator
+from .opendata import CollecteData, CollecteHoraire
 
 
 @dataclass(frozen=True, kw_only=True)
 class BesanconEmoiSensorDescription(SensorEntityDescription):
     """Description des capteurs Besançon et moi."""
+
+
+COLLECTE_SENSORS: dict[str, BesanconEmoiSensorDescription] = {
+    "collecte_residuels": BesanconEmoiSensorDescription(
+        key="collecte_residuels",
+        translation_key="collecte_residuels",
+    ),
+    "collecte_recyclables": BesanconEmoiSensorDescription(
+        key="collecte_recyclables",
+        translation_key="collecte_recyclables",
+    ),
+}
 
 
 WASTE_SENSORS: dict[str, BesanconEmoiSensorDescription] = {
@@ -93,13 +106,95 @@ async def async_setup_entry(
     coordinator: BesanconEmoiCoordinator = entry.runtime_data
     entities: list[BesanconEmoiSensorEntity] = []
     for contract_data in coordinator.data.values():
-        if isinstance(contract_data, WasteContractData):
+        if isinstance(contract_data, CollecteData):
+            for sensor_key in COLLECTE_SENSORS:
+                entities.append(BesanconEmoiCollecteSensorEntity(coordinator, contract_data, sensor_key))
+        elif isinstance(contract_data, WasteContractData):
             for sensor_key in WASTE_SENSORS:
                 entities.append(BesanconEmoiWasteSensorEntity(coordinator, contract_data, sensor_key))
         else:
             for sensor_key in SENSORS:
                 entities.append(BesanconEmoiSensorEntity(coordinator, contract_data, sensor_key))
     async_add_entities(entities)
+
+
+class BesanconEmoiCollecteSensorEntity(CoordinatorEntity[BesanconEmoiCoordinator], SensorEntity):
+    """Capteur de jour de collecte (résiduels ou recyclables)."""
+
+    entity_description: BesanconEmoiSensorDescription
+    _attr_has_entity_name = True
+
+    def __init__(
+        self,
+        coordinator: BesanconEmoiCoordinator,
+        collecte: CollecteData,
+        sensor_key: str,
+    ) -> None:
+        """Initialise le capteur."""
+        super().__init__(coordinator)
+        self.entity_description = COLLECTE_SENSORS[sensor_key]
+        self._sensor_key = sensor_key
+        self._attr_unique_id = f"collecte_{sensor_key}"
+        self._attr_device_info = {
+            "identifiers": {(DOMAIN, "collecte-dechets")},
+            "name": "Collecte déchets",
+            "manufacturer": MANUFACTURER,
+        }
+
+    def _collecte(self) -> CollecteData | None:
+        """Données de collecte depuis le coordinateur."""
+        data = self.coordinator.data.get("collecte")
+        return data if isinstance(data, CollecteData) else None
+
+    def _horaire(self, collecte: CollecteData) -> CollecteHoraire | None:
+        """Horaire affiché par ce capteur."""
+        adresse = collecte.principale()
+        if adresse is None:
+            return None
+        if self._sensor_key == "collecte_residuels":
+            return adresse.residuels
+        return adresse.recyclables
+
+    @property
+    def native_value(self) -> object:
+        """Valeur du capteur : le jour de collecte."""
+        collecte = self._collecte()
+        if collecte is None:
+            return None
+        horaire = self._horaire(collecte)
+        return horaire.jour if horaire else None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, object]:
+        """Attributs complémentaires du capteur."""
+        attributes: dict[str, object] = {}
+        collecte = self._collecte()
+        if collecte is None:
+            return attributes
+        adresse = collecte.principale()
+        if adresse is not None:
+            attributes["adresse"] = adresse.adresse
+            if adresse.calendrier_pdf:
+                attributes["calendrier_pdf"] = adresse.calendrier_pdf
+            if len(collecte.adresses) > 1:
+                # Certaines rues ont un calendrier par côté ou par
+                # numéro : les autres adresses sont listées pour information.
+                attributes["autres_adresses"] = [
+                    {
+                        "adresse": a.adresse,
+                        "residuels": a.residuels.jour if a.residuels else None,
+                        "recyclables": a.recyclables.jour if a.recyclables else None,
+                    }
+                    for a in collecte.adresses[1:10]
+                ]
+        horaire = self._horaire(collecte)
+        if horaire is not None:
+            attributes["parite"] = horaire.parite
+            prochaine = horaire.prochaine(date.today())
+            if prochaine is not None:
+                attributes["prochaine_collecte"] = prochaine.isoformat()
+                attributes["jours_avant_collecte"] = (prochaine - date.today()).days
+        return attributes
 
 
 class BesanconEmoiWasteSensorEntity(CoordinatorEntity[BesanconEmoiCoordinator], SensorEntity):

@@ -26,6 +26,18 @@ facture à partir de l'index publié ici).
     (kg) pour les bacs recyclables ;
   - la liste des **20 dernières pesées** en attribut de chaque capteur ;
   - la table du portail est paginée : toutes les pages sont lues.
+- Calendrier de collecte des déchets (open data Grand Besançon, sans
+  identifiants) :
+  - **Collecte résiduels** et **Collecte recyclables** (jour + parité
+    `toutes les semaines` / `semaines paires` / `semaines impaires`), avec
+    prochaine date, compte à rebours en jours, adresse et calendrier PDF
+    officiel en attributs ;
+  - une entité **calendrier** au format Home Assistant (aperçu du calendrier,
+    automations sur les événements) ;
+  - configuration par commune et rue du formulaire
+    [open data](https://data.grandbesancon.fr/opendata/dataset/joursDeCollecteDechets/)
+    (68 communes), dans les options de l'intégration ;
+  - les erreurs open data n'interrompent pas les autres entités.
 - Action `besancon_emoi.saisir_index` pour transmettre un relevé de compteur,
   avec ciblage par contrat quand plusieurs compteurs sont configurés.
 - **Saisie hebdomadaire automatique** : l'index est lu sur une entité de
