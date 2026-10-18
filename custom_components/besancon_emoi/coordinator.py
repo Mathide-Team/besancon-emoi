@@ -29,6 +29,7 @@ from .const import (
     LOGGER,
     WEEKDAYS,
 )
+from .facture import total_ttc_du_pdf
 from .opendata import CollecteData, GrandBesanconOpendataClient, OpendataError
 
 _WEEKDAY_NUMBERS = {name: number for number, name in enumerate(WEEKDAYS)}
@@ -59,6 +60,10 @@ class BesanconEmoiCoordinator(DataUpdateCoordinator[_Donnees]):
         self.opendata = opendata
         # Date du dernier relevé transmis automatiquement (persistée).
         self._last_auto_submit: date | None = _parse_iso(entry.options.get("last_auto_submit"))
+        # Totaux TTC lus dans les PDF de factures, par « idcontrat:facture » :
+        # une facture n'est téléchargée qu'une fois par session (le cache
+        # est perdu au redémarrage, un nouveau téléchargement a alors lieu).
+        self._totaux_ttc: dict[str, float] = {}
 
     async def _async_update_data(self) -> dict[str, ContractData]:
         """Met à jour les données de tous les contrats.
@@ -107,6 +112,7 @@ class BesanconEmoiCoordinator(DataUpdateCoordinator[_Donnees]):
                 msg = f"Contrat {key} : {err}"
                 raise UpdateFailed(msg) from err
             data[key] = ContractData(contract=contract, index_history=history, bills=bills)
+            await self._async_lire_total_facture(key, data[key])
         # Les déchets sont complémentaires : une erreur côté pesées ne
         # doit pas empêcher la mise à jour de l'eau.
         try:
@@ -137,6 +143,42 @@ class BesanconEmoiCoordinator(DataUpdateCoordinator[_Donnees]):
         await self._async_maybe_fetch_collecte(data)
         await self._async_maybe_auto_submit(data)
         return data
+
+    async def _async_lire_total_facture(self, idcontrat: str, contract_data: ContractData) -> None:
+        """Lit le total TTC de la dernière facture dans son PDF.
+
+        La liste du portail ne publie que le montant prélevé (mensualité
+        ou ajustement annuel) ; le total est extrait du PDF, une seule fois
+        par facture et par session. Un échec (PDF inaccessible, illisible
+        ou sans total reconnaissable) n'interrompt pas la mise à jour : le
+        capteur « Dernière facture (TTC) » reste inconnu et l'erreur est
+        journalisée.
+        """
+        if not contract_data.bills:
+            return
+        latest = contract_data.bills[0]
+        if latest.facture in ("", None) or not latest.pdf_path:
+            return
+        cache_key = f"{idcontrat}:{latest.facture}"
+        total = self._totaux_ttc.get(cache_key)
+        if total is None:
+            try:
+                pdf = await self.client.async_download_bill_pdf(latest.pdf_path)
+            except BesanconEmoiAuthError:
+                raise
+            except BesanconEmoiError as err:
+                LOGGER.warning("PDF de la facture %s inaccessible : %s", latest.facture, err)
+                return
+            try:
+                total = total_ttc_du_pdf(pdf)
+            except ValueError as err:
+                LOGGER.warning("Facture %s illisible : %s", latest.facture, err)
+                return
+            if total is None:
+                LOGGER.warning("Total TTC introuvable dans la facture %s", latest.facture)
+                return
+            self._totaux_ttc[cache_key] = total
+        latest.total_ttc = total
 
     async def _async_maybe_fetch_collecte(self, data: _Donnees) -> None:
         """Récupère le calendrier de collecte si une rue est configurée."""

@@ -62,6 +62,9 @@
       },
       "dernier_prelevement": {
         "name": "Latest direct debit"
+      },
+      "derniere_facture_ttc": {
+        "name": "Latest bill (incl. VAT)"
       }
     }
   }
