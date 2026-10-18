@@ -7,6 +7,10 @@
 - Capteur **Dernière facture (TTC)** par contrat d'eau : total TTC extrait
   du PDF de la facture (le portail ne publie que le montant prélevé).
   Lecture unique par facture (cache par numéro), échec non bloquant (#5).
+- Saisie hebdomadaire sur les comptes à plusieurs contrats d'eau :
+  appariement « contrat → entité source » dans les options (un champ par
+  contrat), garde-fous conservés (index absolu en m³) ; sans appariement,
+  le comportement historique est conservé (#4).
 
 ## [0.1.0] - 2026-10-18
 

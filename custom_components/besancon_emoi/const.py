@@ -17,6 +17,9 @@ CONF_PASSWORD = "password"
 CONF_AUTO_SUBMIT = "auto_submit"
 CONF_SUBMIT_WEEKDAY = "submit_weekday"
 CONF_INDEX_ENTITY = "index_entity"
+# Appariement contrat d'eau → entité source d'index (comptes à plusieurs
+# contrats : on n'envoie jamais le même index à plusieurs compteurs).
+CONF_INDEX_ENTITIES = "index_entities"
 
 # Calendrier de collecte des déchets (open data Grand Besançon).
 CONF_COMMUNE = "collecte_commune"
