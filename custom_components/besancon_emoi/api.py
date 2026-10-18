@@ -74,6 +74,37 @@ class ContractData:
     bills: list[Bill] = field(default_factory=list)
 
 
+@dataclass
+class Weighing:
+    """Une pesée de bac (déchets)."""
+
+    date: date | None
+    heure: str
+    poids_kg: float | None
+    type_bac: str
+    volume_l: int | None = None
+    vidages: int | None = None
+    no_bac: str = ""
+    no_puce: str = ""
+
+
+@dataclass
+class WasteContract:
+    """Un contrat déchets raccroché à son abonnement portail."""
+
+    idcontrat: str
+    abo: str
+
+
+@dataclass
+class WasteContractData:
+    """Données d'un contrat déchets (pesées facturées + recyclables)."""
+
+    contract: WasteContract
+    pesees: list[Weighing] = field(default_factory=list)
+    pesees_jaune: list[Weighing] = field(default_factory=list)
+
+
 class BesanconEmoiClient:
     """Client asynchrone du portail Besançon et moi."""
 
@@ -213,6 +244,51 @@ class BesanconEmoiClient:
         bills.sort(key=lambda b: b.date or date.min, reverse=True)
         return bills
 
+    async def async_get_waste_contracts(self) -> list[WasteContract]:
+        """Liste les contrats déchets du compte.
+
+        La page d'accueil de l'espace personnel référence chaque
+        prestation par son abonnement (``/prestations/dechets/index/abo/…``) ;
+        les pages déchets référencent ensuite le contrat par son
+        identifiant (``/prestations/dechets/…/id/NNNNNN-NN``).
+        """
+        home_text = await self._get_text("/")
+        contracts: list[WasteContract] = []
+        for abo in dict.fromkeys(_DECHETS_ABO_RE.findall(home_text)):
+            text = await self._get_text(f"/prestations/dechets/index/abo/{abo}")
+            for idcontrat in dict.fromkeys(_DECHETS_ID_RE.findall(text)):
+                contracts.append(WasteContract(idcontrat=idcontrat, abo=abo))
+        LOGGER.debug("%d contrats déchets récupérés", len(contracts))
+        return contracts
+
+    async def async_get_weighings(self, idcontrat: str, jaune: bool = False) -> list[Weighing]:
+        """Liste les pesées d'un contrat déchets (toutes les pages).
+
+        La liste « résiduel » regroupe les pesées facturées ; la liste
+        « jaune » les pesées des bacs recyclables. La table est paginée
+        (50 lignes par page) : les pages suivantes sont lues jusqu'à
+        la dernière référencée.
+        """
+        base = f"/prestations/dechets/pesees{'jaune' if jaune else ''}/id/{idcontrat}"
+        text = await self._get_text(base)
+        weighings = _parse_pesees_table(text)
+        pages = [int(p) for p in _PAGINATION_RE.findall(text) if int(p) > 1]
+        last_page = max(pages) if pages else 1
+        # Garde-fou : au plus 30 pages lues par liste.
+        for page in range(2, min(last_page, 30) + 1):
+            page_text = await self._get_text(f"{base}/page/{page}")
+            rows = _parse_pesees_table(page_text)
+            if not rows:
+                break
+            weighings.extend(rows)
+        LOGGER.debug(
+            "%d pesées récupérées pour le contrat déchets %s (jaune=%s)",
+            len(weighings),
+            idcontrat,
+            jaune,
+        )
+        return weighings
+
     async def async_submit_index(
         self,
         idcontrat: str,
@@ -300,6 +376,40 @@ def _parse_index_row(cells: list[str]) -> IndexReading:
 
 
 _PDF_NAME_RE = re.compile(r"/\d+_(\d+)_\d+.*?\.pdf")
+_DECHETS_ABO_RE = re.compile(r"/prestations/dechets/index/abo/(\d+)")
+_DECHETS_ID_RE = re.compile(r"/prestations/dechets/[a-z]+/id/(\d+-\d+)")
+_PAGINATION_RE = re.compile(r"/page/(\d+)")
+_HEURE_RE = re.compile(r"\d{1,2}h\d{2}")
+
+
+def _parse_pesees_table(text: str) -> list[Weighing]:
+    """Construit les pesées depuis la table d'une page de pesées.
+
+    Les lignes de total et la note de bas de tableau n'ont pas huit
+    cellules : elles sont ignorées, seules les lignes de données sont
+    retenues.
+    """
+    soup = BeautifulSoup(text, "html.parser")
+    weighings: list[Weighing] = []
+    for row in soup.select("table tr"):
+        cells = row.find_all("td")
+        if len(cells) != 8:
+            continue
+        texts = [c.get_text(strip=True) for c in cells]
+        heure = texts[1] if _HEURE_RE.fullmatch(texts[1]) else ""
+        weighings.append(
+            Weighing(
+                date=_parse_date(texts[0]),
+                heure=heure,
+                poids_kg=_parse_float(texts[2]),
+                type_bac=texts[3],
+                volume_l=int(texts[4]) if texts[4].isdigit() else None,
+                vidages=int(texts[5]) if texts[5].isdigit() else None,
+                no_bac=texts[6],
+                no_puce=texts[7],
+            )
+        )
+    return weighings
 
 
 def _parse_bill_row(cells: list) -> Bill:

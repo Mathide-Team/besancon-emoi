@@ -21,8 +21,16 @@ from custom_components.besancon_emoi.api import (
     BesanconEmoiClient,
     BesanconEmoiError,
     Contract,
+    WasteContract,
+    Weighing,
 )
-from custom_components.besancon_emoi.const import CONF_AUTO_SUBMIT, CONF_SUBMIT_WEEKDAY, DOMAIN, WEEKDAYS
+from custom_components.besancon_emoi.const import (
+    CONF_AUTO_SUBMIT,
+    CONF_INDEX_ENTITY,
+    CONF_SUBMIT_WEEKDAY,
+    DOMAIN,
+    WEEKDAYS,
+)
 from tests.test_api import _build_app
 from tests.test_init import EMAIL, IDCONTRAT, IDCONTRAT_SLUG, PASSWORD, _configurer
 
@@ -817,3 +825,152 @@ async def test_telechargement_pdf_contenu_inattendu() -> None:
             raise AssertionError(msg)
     finally:
         await client.close()
+
+
+async def test_capteurs_dechets(hass: HomeAssistant) -> None:
+    """Les pesées déchets exposent capteurs et attributs, l'eau reste intacte."""
+    hass.config.language = "fr"
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={CONF_EMAIL: EMAIL, CONF_PASSWORD: PASSWORD},
+    )
+    entry.add_to_hass(hass)
+    pesees = [
+        Weighing(
+            date=date(2026, 10, 5),
+            heure="05h42",
+            poids_kg=25.5,
+            type_bac="Résiduel",
+            volume_l=140,
+            vidages=1,
+            no_bac="700111",
+            no_puce="1A2B3C4D5E",
+        ),
+        Weighing(
+            date=date(2026, 9, 21),
+            heure="05h39",
+            poids_kg=40.0,
+            type_bac="Résiduel",
+            volume_l=140,
+            vidages=1,
+            no_bac="700111",
+            no_puce="1A2B3C4D5E",
+        ),
+    ]
+    pesees_jaune = [
+        Weighing(
+            date=date(2026, 9, 29),
+            heure="06h12",
+            poids_kg=11.5,
+            type_bac="Recyclable",
+            volume_l=330,
+            vidages=1,
+            no_bac="J700222",
+            no_puce="2B3C4D5E6F",
+        ),
+    ]
+    with patch("custom_components.besancon_emoi.BesanconEmoiClient", autospec=True) as mock_client:
+        instance = mock_client.return_value
+        from tests.test_init import _contract_data as _donnees_contrat
+
+        instance.async_login = AsyncMock()
+        instance.async_get_contracts = AsyncMock(return_value=[_donnees_contrat().contract])
+        instance.async_get_index_history = AsyncMock(return_value=[])
+        instance.async_get_bills = AsyncMock(return_value=[])
+        instance.async_get_waste_contracts = AsyncMock(
+            return_value=[WasteContract(idcontrat="333333-04", abo="88888")]
+        )
+        instance.async_get_weighings = AsyncMock(
+            side_effect=lambda idcontrat, jaune=False: pesees_jaune if jaune else pesees
+        )
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+    prefixe = "sensor.dechets_333333_04"
+    poids = hass.states.get(f"{prefixe}_poids_de_la_derniere_pesee")
+    assert poids is not None
+    assert poids.state == "25.5"
+    assert poids.attributes["date_pesee"] == "2026-10-05"
+    assert poids.attributes["type_de_bac"] == "Résiduel"
+    assert poids.attributes["volume_l"] == 140
+    assert poids.attributes["vidages"] == 1
+    assert len(poids.attributes["pesees"]) == 2
+    poids_jaune = hass.states.get(f"{prefixe}_poids_de_la_derniere_pesee_bac_jaune")
+    assert poids_jaune is not None
+    assert poids_jaune.state == "11.5"
+    assert poids_jaune.attributes["type_de_bac"] == "Recyclable"
+    derniere = hass.states.get(f"{prefixe}_derniere_pesee")
+    assert derniere is not None
+    # L'état est un horodatage (rendu dans le fuseau du serveur de test).
+    assert derniere.state.startswith("2026-10-05T")
+    # Les capteurs d'eau sont toujours là.
+    eau = hass.states.get(f"sensor.compteur_d_eau_{IDCONTRAT_SLUG}_index_du_compteur")
+    assert eau is not None
+
+
+async def test_saisie_hebdo_active_avec_dechets(hass: HomeAssistant) -> None:
+    """Un contrat déchets ne désactive pas la saisie hebdomadaire (eau seule compte)."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={CONF_EMAIL: EMAIL, CONF_PASSWORD: PASSWORD},
+        options={
+            CONF_AUTO_SUBMIT: True,
+            CONF_SUBMIT_WEEKDAY: WEEKDAYS[date.today().weekday()],
+            CONF_INDEX_ENTITY: "sensor.compteur_wmbus_index",
+        },
+    )
+    entry.add_to_hass(hass)
+    hass.states.async_set("sensor.compteur_wmbus_index", "325")
+    with patch("custom_components.besancon_emoi.BesanconEmoiClient", autospec=True) as mock_client:
+        from custom_components.besancon_emoi.coordinator import BesanconEmoiCoordinator
+
+        instance = mock_client.return_value
+        from tests.test_init import _contract_data
+
+        instance.async_login = AsyncMock()
+        instance.async_get_contracts = AsyncMock(return_value=[_contract_data().contract])
+        instance.async_get_index_history = AsyncMock(return_value=[])
+        instance.async_get_bills = AsyncMock(return_value=[])
+        instance.async_get_waste_contracts = AsyncMock(
+            return_value=[WasteContract(idcontrat="333333-04", abo="88888")]
+        )
+        instance.async_get_weighings = AsyncMock(return_value=[])
+        instance.async_submit_index = AsyncMock()
+        coordinator = BesanconEmoiCoordinator(hass, entry, instance)
+        data = await coordinator._async_update_data()
+        # Eau + déchets dans les données, mais la saisie vise bien l'eau.
+        assert len(data) == 2
+        instance.async_submit_index.assert_awaited_once()
+
+
+async def test_erreur_dechets_ne_casse_pas_l_eau(hass: HomeAssistant) -> None:
+    """Une erreur côté pesées ne doit pas empêcher la mise à jour de l'eau."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={CONF_EMAIL: EMAIL, CONF_PASSWORD: PASSWORD},
+    )
+    entry.add_to_hass(hass)
+    with patch("custom_components.besancon_emoi.BesanconEmoiClient", autospec=True) as mock_client:
+        from custom_components.besancon_emoi.coordinator import BesanconEmoiCoordinator
+
+        instance = mock_client.return_value
+        from tests.test_init import _contract_data
+
+        instance.async_login = AsyncMock()
+        instance.async_get_contracts = AsyncMock(return_value=[_contract_data().contract])
+        instance.async_get_index_history = AsyncMock(return_value=[])
+        instance.async_get_bills = AsyncMock(return_value=[])
+        # La découverte des contrats déchets échoue : l'eau doit rester
+        # disponible, avec un avertissement dans les journaux.
+        instance.async_get_waste_contracts = AsyncMock(side_effect=BesanconEmoiError("portail indisponible"))
+        coordinator = BesanconEmoiCoordinator(hass, entry, instance)
+        data = await coordinator._async_update_data()
+        assert IDCONTRAT in data
+        # Une pesée qui échoue pour un contrat connu est ignorée.
+        instance.async_get_waste_contracts = AsyncMock(
+            return_value=[WasteContract(idcontrat="333333-04", abo="88888")]
+        )
+        instance.async_get_weighings = AsyncMock(side_effect=BesanconEmoiError("erreur"))
+        data = await coordinator._async_update_data()
+        assert IDCONTRAT in data
+        assert "333333-04" not in data

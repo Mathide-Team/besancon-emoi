@@ -62,6 +62,18 @@
       },
       "dernier_prelevement": {
         "name": "Dernier prélèvement"
+      },
+      "pesee_derniere": {
+        "name": "Dernière pesée"
+      },
+      "pesee_derniere_poids": {
+        "name": "Poids de la dernière pesée"
+      },
+      "pesee_jaune_derniere": {
+        "name": "Dernière pesée bac jaune"
+      },
+      "pesee_jaune_derniere_poids": {
+        "name": "Poids de la dernière pesée bac jaune"
       }
     }
   }
