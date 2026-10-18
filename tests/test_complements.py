@@ -799,9 +799,7 @@ async def test_telechargement_pdf_contenu_inattendu() -> None:
     app = web.Application()
 
     async def facture_html(request: web.Request) -> web.Response:
-        return web.Response(
-            text="<html><body>Page</body></html>", content_type="text/html"
-        )
+        return web.Response(text="<html><body>Page</body></html>", content_type="text/html")
 
     app.router.add_get("/prestations/eau/facture/id/{rest:.*}", facture_html)
     client = TestClient(TestServer(app))
