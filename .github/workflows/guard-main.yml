@@ -1,0 +1,29 @@
+# Garde-fou d'intégration : toute PR vers `main` doit venir de `dev`.
+#
+# Objectif : `main` reste la branche de livraison ; les features se
+# fusionnent d'abord dans `dev` (via PR dev), puis `dev` -> `main` (via
+# PR). Ce workflow échoue pour toute PR vers `main` dont la branche
+# source n'est pas `dev` -- il est rendu obligatoire par la protection
+# de branche de `main` (required status check), ce qui rend le passage
+# par `dev` effectivement obligatoire.
+name: Garde intégration (dev -> main)
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  garde-dev-vers-main:
+    name: "Garde : PR vers main doit venir de dev"
+    runs-on: ${{ fromJSON(vars.RUNS_ON_LINUX || '{"group":"maison","labels":["self-hosted","linux"]}') }}
+    steps:
+      - name: Vérifier la branche source
+        run: |
+          if [ "${{ github.head_ref }}" != "dev" ]; then
+            echo "::error::Les PR vers main doivent venir de la branche dev (branche source détectée : ${{ github.head_ref }}). Fusionner d'abord la feature dans dev, puis ouvrir la PR dev -> main."
+            exit 1
+          fi
+          echo "PR dev -> main : OK (${{ github.head_ref }} -> ${{ github.base_ref }})"

@@ -1,0 +1,43 @@
+# Vérifie que la protection réelle de `main` et `dev` correspond aux règles
+# versionnées .github/branch-protection/{main,dev}.json (socle Mathide-Team,
+# repris de Gcm4 #161 / Netcross #334).
+#
+# Une protection de branche est un réglage du dépôt, invisible dans le code :
+# ce workflow rend l'écart visible. L'appliquer reste une action manuelle d'un
+# administrateur :
+#   gh api -X PUT repos/<owner>/<repo>/branches/<branche>/protection \
+#     --input .github/branch-protection/<branche>.json
+name: Protection des branches
+
+"on":
+  push:
+    branches: [main, dev]
+  schedule:
+    - cron: "23 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verification:
+    name: "Protection de ${{ matrix.branche }} conforme à la règle versionnée"
+    runs-on: ${{ fromJSON(vars.RUNS_ON_LINUX || '{"group":"maison","labels":["self-hosted","linux"]}') }}
+    strategy:
+      fail-fast: false
+      matrix:
+        branche: [main, dev]
+    steps:
+      - name: Checkout du dépôt
+        uses: actions/checkout@v7
+
+      - name: Installation de uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+
+      - name: Installation de Python
+        run: uv python install
+
+      - name: Comparaison avec .github/branch-protection/${{ matrix.branche }}.json
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: uv run --no-project python scripts/check_branch_protection.py --branche ${{ matrix.branche }}

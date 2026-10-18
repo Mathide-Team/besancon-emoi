@@ -1,0 +1,43 @@
+# CI du socle Mathide-Team. Le job « Qualité (lint, tests) » est un check
+# requis sur main et dev (.github/branch-protection/*.json) : garder son nom,
+# l'adapter au langage du dépôt (ruff, mypy, pytest, cargo, npm…).
+name: CI
+
+"on":
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    name: Qualité (lint, tests)
+    runs-on: ${{ fromJSON(vars.RUNS_ON_LINUX || '{"group":"maison","labels":["self-hosted","linux"]}') }}
+
+    steps:
+      - name: Checkout du dépôt
+        uses: actions/checkout@v7
+
+      - name: Installation de uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+
+      - name: Installation de Python
+        run: uv python install
+
+      - name: Lint YAML (yamllint --strict)
+        run: uvx yamllint==1.38.0 --strict -c .yamllint.yaml .
+
+      - name: Syntaxe des scripts Python
+        run: uv run --no-project python -m py_compile scripts/*.py
+
+      - name: Tests (unittest)
+        run: |
+          if [ -d tests ]; then
+            uv run --no-project python -m unittest discover -s tests -v
+          else
+            echo "Pas de dossier tests/ : à ajouter."
+          fi
