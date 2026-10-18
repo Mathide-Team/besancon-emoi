@@ -22,7 +22,7 @@ from .const import (
     DOMAIN,
     WEEKDAYS,
 )
-from .opendata import GrandBesanconOpendataClient
+from .opendata import GrandBesanconOpendataClient, OpendataError
 
 STEP_USER_SCHEMA = vol.Schema(
     {
@@ -143,7 +143,17 @@ class BesanconEmoiOptionsFlow(OptionsFlow):
         rues = await self._async_get_rues(commune) if commune else None
         if commune and rues is None:
             errors["base"] = "cannot_connect"
+        # Un changement de commune réinitialise rue et numéro, même si le
+        # même code de rue existe dans les deux communes : le calendrier
+        # dépend du couple commune + rue.
+        commune_precedente = self.config_entry.options.get(CONF_COMMUNE, "")
+        commune_changee = commune != commune_precedente
         rue_courante = self.config_entry.options.get(CONF_RUE, "")
+        if commune_changee or (rues and rue_courante not in {r.code for r in rues}):
+            rue_courante = ""
+            numero_courant = ""
+        else:
+            numero_courant = self.config_entry.options.get(CONF_NUMERO, "")
         champ_rue: Any = vol.Optional(CONF_RUE, default=rue_courante)
         if rues:
             validateur_rue: Any = vol.In({r.code: r.nom for r in rues} | {"": "— Aucune —"})
@@ -152,10 +162,7 @@ class BesanconEmoiOptionsFlow(OptionsFlow):
         schema = vol.Schema(
             {
                 champ_rue: validateur_rue,
-                vol.Optional(
-                    CONF_NUMERO,
-                    default=self.config_entry.options.get(CONF_NUMERO, ""),
-                ): str,
+                vol.Optional(CONF_NUMERO, default=numero_courant): str,
             }
         )
         return self.async_show_form(step_id="collecte", data_schema=schema, errors=errors)
@@ -165,7 +172,7 @@ class BesanconEmoiOptionsFlow(OptionsFlow):
         client = GrandBesanconOpendataClient(async_get_clientsession(self.hass))
         try:
             return await client.async_get_communes()
-        except Exception:
+        except OpendataError:
             return None
 
     async def _async_get_rues(self, commune: str) -> list | None:
@@ -173,5 +180,5 @@ class BesanconEmoiOptionsFlow(OptionsFlow):
         client = GrandBesanconOpendataClient(async_get_clientsession(self.hass))
         try:
             return await client.async_get_streets(commune)
-        except Exception:
+        except OpendataError:
             return None

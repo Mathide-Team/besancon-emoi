@@ -14,7 +14,7 @@ import re
 from dataclasses import dataclass
 from datetime import date, timedelta
 
-from aiohttp import ClientResponseError, ClientSession
+from aiohttp import ClientError, ClientSession
 from bs4 import BeautifulSoup
 
 DATASET_URL = "https://data.grandbesancon.fr/opendata/dataset/joursDeCollecteDechets/"
@@ -159,7 +159,7 @@ class GrandBesanconOpendataClient:
             async with self._session.get(url) as response:
                 response.raise_for_status()
                 donnees = await response.json()
-        except (ClientResponseError, TimeoutError) as err:
+        except (ClientError, TimeoutError) as err:
             msg = f"Impossible de récupérer la liste des rues : {err}"
             raise OpendataError(msg) from err
         rues = [
@@ -192,7 +192,7 @@ class GrandBesanconOpendataClient:
             async with self._session.get(url) as response:
                 response.raise_for_status()
                 return await response.text()
-        except (ClientResponseError, TimeoutError) as err:
+        except (ClientError, TimeoutError) as err:
             msg = f"Open data inaccessible : {err}"
             raise OpendataError(msg) from err
 
@@ -202,7 +202,7 @@ class GrandBesanconOpendataClient:
             async with self._session.post(url, data=donnees) as response:
                 response.raise_for_status()
                 return await response.text()
-        except (ClientResponseError, TimeoutError) as err:
+        except (ClientError, TimeoutError) as err:
             msg = f"Open data inaccessible : {err}"
             raise OpendataError(msg) from err
 
