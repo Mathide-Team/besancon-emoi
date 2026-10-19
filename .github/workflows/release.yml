@@ -18,11 +18,15 @@ jobs:
       - name: Checkout du dépôt
         uses: actions/checkout@v7
 
+      # python3 du runner maison trop ancien (str.removeprefix : Python ≥ 3.9).
+      - name: Installation de uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+
       - name: Tag = version du manifest, notes tirées du CHANGELOG
-        run: python3 scripts/notes_de_version.py "${GITHUB_REF_NAME}" > notes.md
+        run: uv run --no-project python scripts/notes_de_version.py "${GITHUB_REF_NAME}" > notes.md
 
       - name: Archive de l'intégration
-        run: cd custom_components/besancon_emoi && python3 -m zipfile -c ../../besancon_emoi.zip .
+        run: cd custom_components/besancon_emoi && uv run --no-project python -m zipfile -c ../../besancon_emoi.zip .
 
       - name: Release GitHub
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
