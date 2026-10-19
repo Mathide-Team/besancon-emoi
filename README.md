@@ -99,6 +99,24 @@ automation:
           contrat: "123456-02"  # obligatoire si plusieurs contrats
 ```
 
+## Tableau de bord
+
+Une vue prête à l'emploi est fournie dans
+[`exemples/tableau-de-bord.yaml`](exemples/tableau-de-bord.yaml) :
+
+- **prochaines collectes** : jour et échéance (aujourd'hui, demain, dans
+  N jours) des résiduels et des recyclables, adresse et lien vers le
+  calendrier PDF ;
+- **mes contrats** : un tableau par contrat (eau, déchets) avec toutes ses
+  mesures, sans rien à adapter ;
+- **calendrier de collecte** et **consommation d'eau sur 30 jours** :
+  remplacer les entités d'exemple par les vôtres.
+
+Seules des cartes intégrées à Home Assistant sont utilisées. Installation :
+Paramètres → Tableaux de bord → ouvrir un tableau de bord → ⋮ → Modifier
+→ ⋮ → Éditeur de configuration, puis coller le contenu du fichier comme
+nouvel élément de `views:`.
+
 ## Limites
 
 - Le portail est un site web : toute évolution de son HTML peut casser

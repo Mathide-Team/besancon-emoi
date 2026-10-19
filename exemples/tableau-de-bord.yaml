@@ -1,0 +1,82 @@
+# Tableau de bord Besançon et moi (issue #12).
+#
+# Vue Lovelace prête à coller : Paramètres → Tableaux de bord → ouvrir un
+# tableau de bord → ⋮ → Modifier → ⋮ → Éditeur de configuration, puis
+# ajouter cette vue dans « views: ».
+#
+# Seules des cartes intégrées à Home Assistant sont utilisées. Les cartes
+# Markdown parcourent toutes les entités de l'intégration
+# (integration_entities('besancon_emoi')) : rien à adapter, chaque
+# contrat (eau, déchets) et la collecte apparaissent d'eux-mêmes.
+#
+# Les cartes « calendar » et « statistics-graph » demandent des entités
+# explicites : remplacer les entités d'exemple par les vôtres
+# (Paramètres → Appareils et services → Besançon et moi).
+title: Besançon et moi
+path: besancon-et-moi
+icon: mdi:home-city
+cards:
+  - type: markdown
+    title: Prochaines collectes
+    content: |-
+      {%- set ns = namespace(lignes=[]) -%}
+      {%- for e in integration_entities('besancon_emoi') if e.startswith('sensor.') and state_attr(e, 'jours_avant_collecte') is not none -%}
+        {%- set ns.lignes = ns.lignes + [e] -%}
+      {%- endfor -%}
+      {%- if ns.lignes | count == 0 -%}
+      Collecte non configurée : renseignez votre adresse dans les options de l'intégration.
+      {%- else -%}
+      {%- for e in ns.lignes | sort(attribute='entity_id') %}
+      {%- set jours = state_attr(e, 'jours_avant_collecte') | int %}
+      <ha-icon icon="{{ 'mdi:trash-can-outline' if 'residuels' in e else 'mdi:recycle' }}"></ha-icon> **{{ state_attr(e, 'friendly_name') | replace('Collecte déchets ', '') }}** : {{ states(e) }}, {{ "aujourd'hui" if jours == 0 else ('demain' if jours == 1 else 'dans ' ~ jours ~ ' jours') }} ({{ as_timestamp(state_attr(e, 'prochaine_collecte')) | timestamp_custom('%d/%m', true) }})
+      {%- endfor %}
+      {%- set adresse = state_attr(ns.lignes[0], 'adresse') %}
+      {%- if adresse %}
+
+      Adresse : {{ adresse }}{% if state_attr(ns.lignes[0], 'calendrier_pdf') %} — [calendrier PDF]({{ state_attr(ns.lignes[0], 'calendrier_pdf') }}){% endif %}
+      {%- endif %}
+      {%- endif %}
+
+  - type: markdown
+    title: Mes contrats
+    content: |-
+      {%- set capteurs = integration_entities('besancon_emoi') | select('match', 'sensor[.]') | list -%}
+      {%- set ns = namespace(appareils=[]) -%}
+      {%- for e in capteurs if state_attr(e, 'jours_avant_collecte') is none and device_attr(e, 'name') -%}
+        {%- if device_attr(e, 'name') not in ns.appareils and device_attr(e, 'name') != 'Collecte déchets' -%}
+          {%- set ns.appareils = ns.appareils + [device_attr(e, 'name')] -%}
+        {%- endif -%}
+      {%- endfor -%}
+      {%- if ns.appareils | count == 0 -%}
+      Aucun contrat trouvé sur le compte.
+      {%- else -%}
+      {%- for appareil in ns.appareils | sort %}
+      ### {{ appareil }}
+      | Mesure | Valeur |
+      |:--|--:|
+      {%- for e in capteurs | sort if device_attr(e, 'name') == appareil %}
+      {%- set nom = state_attr(e, 'friendly_name') | replace(appareil ~ ' ', '') %}
+      {%- set unite = state_attr(e, 'unit_of_measurement') %}
+      {%- set valeur = states(e) %}
+      | {{ nom }} | {% if valeur in ['unknown', 'unavailable'] %}—{% elif state_attr(e, 'device_class') == 'timestamp' %}{{ as_timestamp(valeur) | timestamp_custom('%d/%m/%Y', true) }}{% else %}{{ valeur }}{{ ' ' ~ unite if unite }}{% endif %} |
+      {%- endfor %}
+      {% endfor %}
+      {%- endif %}
+
+  # À adapter : entité calendrier de la collecte.
+  - type: calendar
+    title: Calendrier de collecte
+    initial_view: listWeek
+    entities:
+      - calendar.collecte_dechets
+
+  # À adapter : capteur « Index du compteur » de votre contrat d'eau.
+  - type: statistics-graph
+    title: Consommation d'eau (30 jours)
+    chart_type: bar
+    period: day
+    days_to_show: 30
+    stat_types:
+      - change
+    entities:
+      - sensor.compteur_d_eau_111111_02_index_du_compteur
