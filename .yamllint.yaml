@@ -1,4 +1,4 @@
-# yamllint : règles du socle Mathide-Team
+# yamllint : règles du socle Mathilde-Team
 extends: default
 rules:
   line-length: disable          # lambdas C++ et templates Jinja sur une ligne
