@@ -1,4 +1,4 @@
-# CI du socle Mathide-Team. Le job « Qualité (lint, tests) » est un check
+# CI du socle Mathilde-Team. Le job « Qualité (lint, tests) » est un check
 # requis sur main et dev (.github/branch-protection/*.json) : garder son nom.
 name: CI
 

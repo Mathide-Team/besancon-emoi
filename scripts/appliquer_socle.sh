@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Applique le socle qualité Mathide-Team à un dépôt créé depuis modele-depot :
+# Applique le socle qualité Mathilde-Team à un dépôt créé depuis modele-depot :
 #   - branche `dev` créée depuis `main` si absente ;
 #   - protections de `main` et `dev` appliquées depuis .github/branch-protection/*.json.
 #
 # Usage (administrateur du dépôt, gh authentifié) :
-#   scripts/appliquer_socle.sh Mathide-Team/<depot>
+#   scripts/appliquer_socle.sh Mathilde-Team/<depot>
 #
 # À relancer après toute modification des règles versionnées. Idempotent.
 set -euo pipefail
