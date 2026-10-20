@@ -6,7 +6,7 @@ Intégration Home Assistant pour le portail **« Besançon et moi »**
 Le portail n'expose pas d'API publique : cette intégration s'appuie sur les
 pages du site (connexion, contrats d'eau, factures, historique d'index,
 saisie du relevé de compteur). Elle est **indépendante de
-[tarifeau](https://github.com/Mathide-Team/tarifeau)** : les deux se
+[tarifeau](https://github.com/Mathilde-Team/tarifeau)** : les deux se
 complètent via les entités Home Assistant (tarifeau peut calculer une
 facture à partir de l'index publié ici).
 
@@ -47,7 +47,7 @@ facture à partir de l'index publié ici).
   avec ciblage par contrat quand plusieurs compteurs sont configurés.
 - **Saisie hebdomadaire automatique** : l'index est lu sur une entité de
   votre choix (par exemple le compteur wM-Bus d'
-  [Esphome-Compteur-wmbus](https://github.com/Mathide-Team/Esphome-Compteur-wmbus))
+  [Esphome-Compteur-wmbus](https://github.com/Mathilde-Team/Esphome-Compteur-wmbus))
   et transmis au portail une fois par semaine, le jour choisi.
 
 ## Installation
@@ -143,8 +143,8 @@ uv run --only-group lint ruff check .
 uv run -p 3.13 --only-group test pytest --cov
 ```
 
-## Socle qualité Mathide-Team
+## Socle qualité Mathilde-Team
 
-Ce dépôt suit le [socle qualité de l'équipe](https://github.com/Mathide-Team/.github/blob/main/SOCLE.md) :
+Ce dépôt suit le [socle qualité de l'équipe](https://github.com/Mathilde-Team/.github/blob/main/SOCLE.md) :
 branches protégées `dev` (intégration) et `main` (livraison), CI requise
 (ruff, yamllint, pytest, hassfest, validation HACS), licence MIT.

@@ -1,5 +1,5 @@
 # Vérifie que la protection réelle de `main` et `dev` correspond aux règles
-# versionnées .github/branch-protection/{main,dev}.json (socle Mathide-Team,
+# versionnées .github/branch-protection/{main,dev}.json (socle Mathilde-Team,
 # repris de Gcm4 #161 / Netcross #334).
 #
 # Une protection de branche est un réglage du dépôt, invisible dans le code :
