@@ -1,6 +1,6 @@
 # Journal des versions
 
-## [Non publié]
+## [0.2.0] - 2026-10-20
 
 ### Ajouté
 
