@@ -52,12 +52,12 @@ class BesanconEmoiConfigFlow(ConfigFlow, domain=DOMAIN):
             try:
                 await client.async_login(user_input[CONF_EMAIL], user_input[CONF_PASSWORD])
             except BesanconEmoiAuthError as err:
-                LOGGER.warning("Connexion refusée pour %s : %s", user_input[CONF_EMAIL], err)
+                LOGGER.warning("Connexion refusée : %s", err)
                 errors["base"] = "invalid_auth"
             except BesanconEmoiError as err:
                 # Aucun échec silencieux : la cause exacte (DNS, TLS,
                 # délai dépassé…) est tracée avec sa pile d'appels.
-                LOGGER.exception("Connexion impossible pour %s : %s", user_input[CONF_EMAIL], err)
+                LOGGER.exception("Connexion impossible : %s", err)
                 errors["base"] = "cannot_connect"
             else:
                 return self.async_create_entry(
@@ -79,10 +79,10 @@ class BesanconEmoiConfigFlow(ConfigFlow, domain=DOMAIN):
             try:
                 await client.async_login(user_input[CONF_EMAIL], user_input[CONF_PASSWORD])
             except BesanconEmoiAuthError as err:
-                LOGGER.warning("Connexion refusée pour %s : %s", user_input[CONF_EMAIL], err)
+                LOGGER.warning("Connexion refusée : %s", err)
                 errors["base"] = "invalid_auth"
             except BesanconEmoiError as err:
-                LOGGER.exception("Connexion impossible pour %s : %s", user_input[CONF_EMAIL], err)
+                LOGGER.exception("Connexion impossible : %s", err)
                 errors["base"] = "cannot_connect"
             else:
                 return self.async_update_reload_and_abort(

@@ -11,7 +11,6 @@ import pytest
 from aiohttp import web
 from aiohttp.test_utils import TestClient, TestServer
 
-from custom_components.besancon_emoi import api as api_module
 from custom_components.besancon_emoi.api import (
     BesanconEmoiAuthError,
     BesanconEmoiClient,
@@ -23,14 +22,6 @@ from custom_components.besancon_emoi.const import LOGGER
 FIXTURES = Path(__file__).parent / "fixtures"
 EMAIL = "exemple@fr.fr"
 PASSWORD = "secret"
-
-
-@pytest.fixture(autouse=True)
-def _raz_auth_debug():
-    """Réinitialise l'état « authentification bavarde » entre les tests."""
-    api_module._auth_debug_actif = True
-    yield
-    api_module._auth_debug_actif = True
 
 
 @pytest.fixture(autouse=True)
@@ -208,6 +199,7 @@ async def test_auth_bavarde_tant_que_connexion_echoue(caplog) -> None:
     """Avant toute réussite, chaque étape d'authentification est visible au niveau INFO."""
     client, api = await _make_client()
     try:
+        caplog.clear()
         with (
             caplog.at_level(logging.INFO, logger=LOGGER.name),
             contextlib.suppress(BesanconEmoiAuthError),
@@ -216,7 +208,7 @@ async def test_auth_bavarde_tant_que_connexion_echoue(caplog) -> None:
         messages = [r.getMessage() for r in caplog.records]
         assert any("Connexion au portail" in m for m in messages)
         assert any("mode bavard" in m for m in messages)
-        assert api_module._auth_debug_actif is True
+        assert api._auth_bavarde is True
     finally:
         await client.close()
 
@@ -226,7 +218,7 @@ async def test_auth_silencieuse_apres_premiere_reussite(caplog) -> None:
     client, api = await _make_client()
     try:
         await api.async_login(EMAIL, PASSWORD)
-        assert api_module._auth_debug_actif is False
+        assert api._auth_bavarde is False
         caplog.clear()
         with caplog.at_level(logging.INFO, logger=LOGGER.name):
             await api.async_login(EMAIL, PASSWORD)
@@ -245,16 +237,60 @@ async def test_auth_redevient_bavarde_apres_echec(caplog) -> None:
     client, api = await _make_client()
     try:
         await api.async_login(EMAIL, PASSWORD)
-        assert api_module._auth_debug_actif is False
+        assert api._auth_bavarde is False
         with contextlib.suppress(BesanconEmoiAuthError):
             await api.async_login(EMAIL, "faux")
-        assert api_module._auth_debug_actif is True
+        assert api._auth_bavarde is True
+        caplog.clear()
         with (
             caplog.at_level(logging.INFO, logger=LOGGER.name),
             contextlib.suppress(BesanconEmoiAuthError),
         ):
             await api.async_login(EMAIL, "faux")
-            assert any("Connexion au portail" in r.getMessage() for r in caplog.records)
+        assert any("Connexion au portail" in r.getMessage() for r in caplog.records)
+    finally:
+        await client.close()
+
+
+async def test_auth_reseau_bavard_apres_echec() -> None:
+    """Un échec réseau (portail injoignable) maintient l'authentification bavarde."""
+    client, api = await _make_client()
+    try:
+        await api.async_login(EMAIL, PASSWORD)
+        assert api._auth_bavarde is False
+        await client.server.close()  # le portail ne répond plus
+        with contextlib.suppress(BesanconEmoiError):
+            await api.async_login(EMAIL, PASSWORD)
+        assert api._auth_bavarde is True
+    finally:
+        await client.close()
+
+
+async def test_session_partagee_home_assistant(hass) -> None:
+    """La connexion fonctionne avec la session partagée de Home Assistant (cookies conservés).
+
+    Vérifie le mécanisme de l'issue #3 avec une session créée par Home
+    Assistant : le cookie du portail est conservé entre la connexion et
+    les requêtes suivantes. Le bocal est « unsafe » car le faux serveur
+    écoute sur 127.0.0.1 : le bocal aiohttp par défaut refuse les
+    cookies des hôtes en adresse IP — en production, le portail est un
+    nom de domaine et la session partagée convient.
+    """
+    from aiohttp.cookiejar import CookieJar
+    from homeassistant.helpers.aiohttp_client import async_create_clientsession
+
+    client = TestClient(TestServer(_build_app()))
+    await client.start_server()
+    try:
+        session = async_create_clientsession(hass, cookie_jar=CookieJar(unsafe=True))
+        api = BesanconEmoiClient(session, base_url=str(client.make_url("")))
+        await api.async_login(EMAIL, PASSWORD)
+        assert api._auth_bavarde is False
+        # La session authentifiée sert directement les pages suivantes :
+        # le cookie du portail est conservé dans la session partagée.
+        contrats = await api.async_get_contracts()
+        assert contrats
+        await api.close()
     finally:
         await client.close()
 
