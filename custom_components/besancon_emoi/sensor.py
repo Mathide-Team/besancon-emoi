@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import date, datetime, tzinfo
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -22,7 +23,10 @@ from . import BesanconEmoiConfigEntry
 from .api import ContractData, WasteContractData
 from .const import DOMAIN, MANUFACTURER
 from .coordinator import BesanconEmoiCoordinator
+from .journal import resumer
 from .opendata import CollecteData, CollecteHoraire
+
+_LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -110,6 +114,12 @@ async def async_setup_entry(
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Ajoute les capteurs de tous les contrats (eau et déchets)."""
+    _LOGGER.debug(
+        "async_setup_entry: entrée | hass=%s, entry=%s, async_add_entities=%s",
+        resumer(hass),
+        resumer(entry),
+        resumer(async_add_entities),
+    )
     coordinator: BesanconEmoiCoordinator = entry.runtime_data
     entities: list[BesanconEmoiSensorEntity] = []
     for contract_data in coordinator.data.values():
@@ -123,6 +133,7 @@ async def async_setup_entry(
             for sensor_key in SENSORS:
                 entities.append(BesanconEmoiSensorEntity(coordinator, contract_data, sensor_key))
     async_add_entities(entities)
+    _LOGGER.debug("async_setup_entry: sortie")
 
 
 class BesanconEmoiCollecteSensorEntity(CoordinatorEntity[BesanconEmoiCoordinator], SensorEntity):
@@ -138,6 +149,12 @@ class BesanconEmoiCollecteSensorEntity(CoordinatorEntity[BesanconEmoiCoordinator
         sensor_key: str,
     ) -> None:
         """Initialise le capteur."""
+        _LOGGER.debug(
+            "BesanconEmoiCollecteSensorEntity.__init__: entrée | coordinator=%s, collecte=%s, sensor_key=%s",
+            resumer(coordinator),
+            resumer(collecte),
+            resumer(sensor_key),
+        )
         super().__init__(coordinator)
         self.entity_description = COLLECTE_SENSORS[sensor_key]
         self._sensor_key = sensor_key
@@ -147,36 +164,50 @@ class BesanconEmoiCollecteSensorEntity(CoordinatorEntity[BesanconEmoiCoordinator
             "name": "Collecte déchets",
             "manufacturer": MANUFACTURER,
         }
+        _LOGGER.debug("BesanconEmoiCollecteSensorEntity.__init__: sortie")
 
     def _collecte(self) -> CollecteData | None:
         """Données de collecte depuis le coordinateur."""
+        _LOGGER.debug("BesanconEmoiCollecteSensorEntity._collecte: entrée")
         data = self.coordinator.data.get("collecte")
+        _LOGGER.debug("BesanconEmoiCollecteSensorEntity._collecte: sortie")
         return data if isinstance(data, CollecteData) else None
 
     def _horaire(self, collecte: CollecteData) -> CollecteHoraire | None:
         """Horaire affiché par ce capteur."""
+        _LOGGER.debug("BesanconEmoiCollecteSensorEntity._horaire: entrée | collecte=%s", resumer(collecte))
         adresse = collecte.principale()
         if adresse is None:
+            _LOGGER.debug("BesanconEmoiCollecteSensorEntity._horaire: sortie | None")
             return None
         if self._sensor_key == "collecte_residuels":
+            _LOGGER.debug("BesanconEmoiCollecteSensorEntity._horaire: sortie")
             return adresse.residuels
+        _LOGGER.debug("BesanconEmoiCollecteSensorEntity._horaire: sortie")
         return adresse.recyclables
 
     @property
     def native_value(self) -> object:
         """Valeur du capteur : le jour de collecte."""
+        _LOGGER.debug("BesanconEmoiCollecteSensorEntity.native_value: entrée")
         collecte = self._collecte()
         if collecte is None:
+            _LOGGER.debug("BesanconEmoiCollecteSensorEntity.native_value: sortie | None")
             return None
         horaire = self._horaire(collecte)
+        _LOGGER.debug("BesanconEmoiCollecteSensorEntity.native_value: sortie")
         return horaire.jour if horaire else None
 
     @property
     def extra_state_attributes(self) -> dict[str, object]:
         """Attributs complémentaires du capteur."""
+        _LOGGER.debug("BesanconEmoiCollecteSensorEntity.extra_state_attributes: entrée")
         attributes: dict[str, object] = {}
         collecte = self._collecte()
         if collecte is None:
+            _LOGGER.debug(
+                "BesanconEmoiCollecteSensorEntity.extra_state_attributes: sortie | %s", resumer(attributes)
+            )
             return attributes
         adresse = collecte.principale()
         if adresse is not None:
@@ -201,6 +232,9 @@ class BesanconEmoiCollecteSensorEntity(CoordinatorEntity[BesanconEmoiCoordinator
             if prochaine is not None:
                 attributes["prochaine_collecte"] = prochaine.isoformat()
                 attributes["jours_avant_collecte"] = (prochaine - date.today()).days
+        _LOGGER.debug(
+            "BesanconEmoiCollecteSensorEntity.extra_state_attributes: sortie | %s", resumer(attributes)
+        )
         return attributes
 
 
@@ -217,6 +251,12 @@ class BesanconEmoiWasteSensorEntity(CoordinatorEntity[BesanconEmoiCoordinator], 
         sensor_key: str,
     ) -> None:
         """Initialise le capteur."""
+        _LOGGER.debug(
+            "BesanconEmoiWasteSensorEntity.__init__: entrée | coordinator=%s, waste_data=%s, sensor_key=%s",
+            resumer(coordinator),
+            resumer(waste_data),
+            resumer(sensor_key),
+        )
         super().__init__(coordinator)
         self.entity_description = WASTE_SENSORS[sensor_key]
         self.waste_data = waste_data
@@ -228,6 +268,7 @@ class BesanconEmoiWasteSensorEntity(CoordinatorEntity[BesanconEmoiCoordinator], 
             "name": f"Déchets {contract.idcontrat}",
             "manufacturer": MANUFACTURER,
         }
+        _LOGGER.debug("BesanconEmoiWasteSensorEntity.__init__: sortie")
 
     def _waste_data(self) -> WasteContractData | None:
         """Données du contrat déchets depuis le coordinateur."""
@@ -236,17 +277,22 @@ class BesanconEmoiWasteSensorEntity(CoordinatorEntity[BesanconEmoiCoordinator], 
     @property
     def native_value(self) -> object:
         """Valeur du capteur."""
+        _LOGGER.debug("BesanconEmoiWasteSensorEntity.native_value: entrée")
         data = self._waste_data()
         if data is None:
+            _LOGGER.debug("BesanconEmoiWasteSensorEntity.native_value: sortie | None")
             return None
         jaune = self._sensor_key.startswith("pesee_jaune")
         pesees = data.pesees_jaune if jaune else data.pesees
         if not pesees:
+            _LOGGER.debug("BesanconEmoiWasteSensorEntity.native_value: sortie | None")
             return None
         latest = pesees[0]
         if self._sensor_key.endswith("_poids"):
+            _LOGGER.debug("BesanconEmoiWasteSensorEntity.native_value: sortie")
             return latest.poids_kg
         if latest.date is None:
+            _LOGGER.debug("BesanconEmoiWasteSensorEntity.native_value: sortie | None")
             return None
         # Home Assistant exige un horodatage avec fuseau : l'heure du
         # portail est locale, on lui rattache le fuseau configuré.
@@ -256,24 +302,33 @@ class BesanconEmoiWasteSensorEntity(CoordinatorEntity[BesanconEmoiCoordinator], 
                 "%Y-%m-%d %Hh%M",
             )
         except ValueError:
+            _LOGGER.debug("BesanconEmoiWasteSensorEntity.native_value: sortie | None")
             return None
         fuseau: tzinfo | None = None
         try:
             fuseau = ZoneInfo(str(self.hass.config.time_zone))
         except (ValueError, ZoneInfoNotFoundError):
+            _LOGGER.debug(
+                "BesanconEmoiWasteSensorEntity.native_value: (ValueError, ZoneInfoNotFoundError) interceptée"
+            )
             fuseau = None
         if fuseau is None:
             fuseau = dt_util.UTC
+        _LOGGER.debug("BesanconEmoiWasteSensorEntity.native_value: sortie")
         return valeur.replace(tzinfo=fuseau)
 
     @property
     def extra_state_attributes(self) -> dict[str, object]:
         """Attributs complémentaires du capteur."""
+        _LOGGER.debug("BesanconEmoiWasteSensorEntity.extra_state_attributes: entrée")
         data = self._waste_data()
         attributes: dict[str, object] = {
             "contrat": self.waste_data.contract.idcontrat,
         }
         if data is None:
+            _LOGGER.debug(
+                "BesanconEmoiWasteSensorEntity.extra_state_attributes: sortie | %s", resumer(attributes)
+            )
             return attributes
         jaune = self._sensor_key.startswith("pesee_jaune")
         pesees = data.pesees_jaune if jaune else data.pesees
@@ -298,6 +353,9 @@ class BesanconEmoiWasteSensorEntity(CoordinatorEntity[BesanconEmoiCoordinator], 
                 }
                 for p in pesees[:20]
             ]
+        _LOGGER.debug(
+            "BesanconEmoiWasteSensorEntity.extra_state_attributes: sortie | %s", resumer(attributes)
+        )
         return attributes
 
 
@@ -314,6 +372,12 @@ class BesanconEmoiSensorEntity(CoordinatorEntity[BesanconEmoiCoordinator], Senso
         sensor_key: str,
     ) -> None:
         """Initialise le capteur."""
+        _LOGGER.debug(
+            "BesanconEmoiSensorEntity.__init__: entrée | coordinator=%s, contract_data=%s, sensor_key=%s",
+            resumer(coordinator),
+            resumer(contract_data),
+            resumer(sensor_key),
+        )
         super().__init__(coordinator)
         self.entity_description = SENSORS[sensor_key]
         self.contract_data = contract_data
@@ -325,6 +389,7 @@ class BesanconEmoiSensorEntity(CoordinatorEntity[BesanconEmoiCoordinator], Senso
             "name": f"Compteur d'eau {contract.idcontrat}",
             "manufacturer": MANUFACTURER,
         }
+        _LOGGER.debug("BesanconEmoiSensorEntity.__init__: sortie")
 
     def _contract_data(self) -> ContractData | None:
         """Données du contrat depuis le coordinateur."""
@@ -333,35 +398,48 @@ class BesanconEmoiSensorEntity(CoordinatorEntity[BesanconEmoiCoordinator], Senso
     @property
     def native_value(self) -> float | None:
         """Valeur du capteur."""
+        _LOGGER.debug("BesanconEmoiSensorEntity.native_value: entrée")
         data = self._contract_data()
         if data is None:
+            _LOGGER.debug("BesanconEmoiSensorEntity.native_value: sortie | None")
             return None
         if self._sensor_key == "index":
             if not data.index_history:
+                _LOGGER.debug("BesanconEmoiSensorEntity.native_value: sortie | None")
                 return None
+            _LOGGER.debug("BesanconEmoiSensorEntity.native_value: sortie")
             return data.index_history[0].index
         if self._sensor_key == "conso_moyenne":
             if not data.index_history:
+                _LOGGER.debug("BesanconEmoiSensorEntity.native_value: sortie | None")
                 return None
+            _LOGGER.debug("BesanconEmoiSensorEntity.native_value: sortie")
             return data.index_history[0].conso_jour
         if self._sensor_key == "dernier_prelevement":
             if not data.bills:
+                _LOGGER.debug("BesanconEmoiSensorEntity.native_value: sortie | None")
                 return None
+            _LOGGER.debug("BesanconEmoiSensorEntity.native_value: sortie")
             return data.bills[0].montant_preleve
         if self._sensor_key == "derniere_facture_ttc":
             if not data.bills:
+                _LOGGER.debug("BesanconEmoiSensorEntity.native_value: sortie | None")
                 return None
             # Total lu dans le PDF de la facture : inconnu si le PDF
             # n'a pas pu être téléchargé ou lu lors de la mise à jour.
+            _LOGGER.debug("BesanconEmoiSensorEntity.native_value: sortie")
             return data.bills[0].total_ttc
+        _LOGGER.debug("BesanconEmoiSensorEntity.native_value: sortie | None")
         return None
 
     @property
     def extra_state_attributes(self) -> dict[str, object]:
         """Attributs complémentaires du capteur."""
+        _LOGGER.debug("BesanconEmoiSensorEntity.extra_state_attributes: entrée")
         data = self._contract_data()
         attributes: dict[str, object] = {"contrat": self.contract_data.contract.idcontrat}
         if data is None:
+            _LOGGER.debug("BesanconEmoiSensorEntity.extra_state_attributes: sortie | %s", resumer(attributes))
             return attributes
         if self._sensor_key == "index" and data.index_history:
             latest = data.index_history[0]
@@ -392,4 +470,5 @@ class BesanconEmoiSensorEntity(CoordinatorEntity[BesanconEmoiCoordinator], Senso
             attributes["montant_preleve"] = latest_bill.montant_preleve
             # Lien relatif du PDF de la facture sur le portail.
             attributes["lien_facture"] = latest_bill.pdf_path
+        _LOGGER.debug("BesanconEmoiSensorEntity.extra_state_attributes: sortie | %s", resumer(attributes))
         return attributes

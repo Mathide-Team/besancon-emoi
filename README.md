@@ -117,6 +117,18 @@ Paramètres → Tableaux de bord → ouvrir un tableau de bord → ⋮ → Modif
 → ⋮ → Éditeur de configuration, puis coller le contenu du fichier comme
 nouvel élément de `views:`.
 
+## Diagnostic
+
+Pour suivre pas à pas la connexion au portail, la lecture des contrats et la saisie du relevé, activer le journal de debug dans `configuration.yaml` :
+
+```yaml
+logger:
+  logs:
+    custom_components.besancon_emoi: debug
+```
+
+Le courriel, le mot de passe et la session ne sont jamais écrits ; les autres paramètres sont résumés (tailles, clés, types, début des pages tronqué à 60 caractères).
+
 ## Limites
 
 - Le portail est un site web : toute évolution de son HTML peut casser

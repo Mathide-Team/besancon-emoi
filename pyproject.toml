@@ -11,6 +11,7 @@ test = [
     "beautifulsoup4>=4.12.2",
     "pypdf>=5.0.0",  # lecture du total TTC dans le PDF de facture
     "pytest-homeassistant-custom-component==0.13.316",  # Home Assistant 2026.2.3, Python 3.13
+    "loguru==0.7.3",  # scripts/ (SOCLE §8) ; même version que --with dans release.yml
 ]
 lint = ["ruff==0.17.1"]
 

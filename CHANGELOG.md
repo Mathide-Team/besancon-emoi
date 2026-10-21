@@ -1,5 +1,14 @@
 # Journal des versions
 
+## [Non publié]
+
+### Ajouté
+- **Journal de debug complet** (#24, SOCLE §8) : chaque fonction de l'intégration trace son entrée (paramètres résumés ; courriel, mot de passe et session masqués) et chacune de ses sorties, et chaque exception interceptée est journalisée. Activation : `logger: logs: custom_components.besancon_emoi: debug`.
+
+### Modifié
+- Un journal par module (`custom_components.besancon_emoi.api`, `.coordinator`…) au lieu d'un journal commun nommé d'après `const`.
+- Scripts journalisés avec loguru ; `tester_hors_ha.py` y renvoie aussi le journal du client.
+
 ## [0.2.0] - 2026-10-20
 
 ### Ajouté

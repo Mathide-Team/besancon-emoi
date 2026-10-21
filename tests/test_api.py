@@ -17,7 +17,6 @@ from custom_components.besancon_emoi.api import (
     BesanconEmoiError,
     WasteContract,
 )
-from custom_components.besancon_emoi.const import LOGGER
 
 FIXTURES = Path(__file__).parent / "fixtures"
 EMAIL = "exemple@fr.fr"
@@ -201,7 +200,7 @@ async def test_auth_bavarde_tant_que_connexion_echoue(caplog) -> None:
     try:
         caplog.clear()
         with (
-            caplog.at_level(logging.INFO, logger=LOGGER.name),
+            caplog.at_level(logging.INFO, logger="custom_components.besancon_emoi.api"),
             contextlib.suppress(BesanconEmoiAuthError),
         ):
             await api.async_login(EMAIL, "faux")
@@ -220,12 +219,12 @@ async def test_auth_silencieuse_apres_premiere_reussite(caplog) -> None:
         await api.async_login(EMAIL, PASSWORD)
         assert api._auth_bavarde is False
         caplog.clear()
-        with caplog.at_level(logging.INFO, logger=LOGGER.name):
+        with caplog.at_level(logging.INFO, logger="custom_components.besancon_emoi.api"):
             await api.async_login(EMAIL, PASSWORD)
             infos = [r for r in caplog.records if r.levelno == logging.INFO]
             assert not any("Connexion au portail" in r.getMessage() for r in infos)
         caplog.clear()
-        with caplog.at_level(logging.DEBUG, logger=LOGGER.name):
+        with caplog.at_level(logging.DEBUG, logger="custom_components.besancon_emoi.api"):
             await api.async_login(EMAIL, PASSWORD)
             assert any("Connexion au portail" in r.getMessage() for r in caplog.records)
     finally:
@@ -243,7 +242,7 @@ async def test_auth_redevient_bavarde_apres_echec(caplog) -> None:
         assert api._auth_bavarde is True
         caplog.clear()
         with (
-            caplog.at_level(logging.INFO, logger=LOGGER.name),
+            caplog.at_level(logging.INFO, logger="custom_components.besancon_emoi.api"),
             contextlib.suppress(BesanconEmoiAuthError),
         ):
             await api.async_login(EMAIL, "faux")

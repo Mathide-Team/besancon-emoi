@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import date, datetime
 
 from homeassistant.config_entries import (
@@ -20,9 +21,12 @@ from .api import (
     BesanconEmoiError,
     ContractData,
 )
-from .const import DOMAIN, LOGGER
+from .const import DOMAIN
 from .coordinator import BesanconEmoiCoordinator
+from .journal import resumer
 from .opendata import GrandBesanconOpendataClient
+
+_LOGGER = logging.getLogger(__name__)
 
 PLATFORMS: list[Platform] = [Platform.CALENDAR, Platform.SENSOR]
 
@@ -35,6 +39,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: BesanconEmoiConfigEntry)
     Une session HTTP dédiée est créée par compte : le cookie de session
     du portail n'est pas partagé entre plusieurs comptes.
     """
+    _LOGGER.debug("async_setup_entry: entrée | hass=%s, entry=%s", resumer(hass), resumer(entry))
     session = async_create_clientsession(hass)
     client = BesanconEmoiClient(session)
     try:
@@ -42,40 +47,50 @@ async def async_setup_entry(hass: HomeAssistant, entry: BesanconEmoiConfigEntry)
     except BesanconEmoiAuthError as err:
         await client.close()
         msg = "Identifiants refusés par le portail"
+        _LOGGER.debug("async_setup_entry: sortie par ConfigEntryAuthFailed | cause=%s", err)
         raise ConfigEntryAuthFailed(msg) from err
     except BesanconEmoiError as err:
         await client.close()
         msg = f"Portail inaccessible : {err}"
+        _LOGGER.debug("async_setup_entry: sortie par ConfigEntryNotReady | cause=%s", err)
         raise ConfigEntryNotReady(msg) from err
     coordinator = BesanconEmoiCoordinator(hass, entry, client, GrandBesanconOpendataClient(session))
     try:
         await coordinator.async_config_entry_first_refresh()
     except Exception:
         await client.close()
+        _LOGGER.debug("async_setup_entry: sortie par relance")
         raise
     entry.runtime_data = coordinator
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
     _register_services(hass)
+    _LOGGER.debug("async_setup_entry: sortie | True")
     return True
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: BesanconEmoiConfigEntry) -> bool:
     """Décharge une entrée de configuration et ferme sa session."""
+    _LOGGER.debug("async_unload_entry: entrée | hass=%s, entry=%s", resumer(hass), resumer(entry))
     coordinator: BesanconEmoiCoordinator | None = getattr(entry, "runtime_data", None)
     unloaded = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unloaded and coordinator is not None:
         await coordinator.client.close()
+    _LOGGER.debug("async_unload_entry: sortie | %s", resumer(unloaded))
     return unloaded
 
 
 async def _async_update_listener(hass: HomeAssistant, entry: BesanconEmoiConfigEntry) -> None:
     """Recharge l'entrée quand les options changent."""
+    _LOGGER.debug("_async_update_listener: entrée | hass=%s, entry=%s", resumer(hass), resumer(entry))
     await hass.config_entries.async_reload(entry.entry_id)
+    _LOGGER.debug("_async_update_listener: sortie")
 
 
 def _register_services(hass: HomeAssistant) -> None:
     """Enregistre l'action de saisie manuelle du relevé."""
+
+    _LOGGER.debug("_register_services: entrée | hass=%s", resumer(hass))
 
     async def async_saisir_index(call: ServiceCall) -> None:
         """Transmet un relevé d'index au portail.
@@ -84,6 +99,7 @@ def _register_services(hass: HomeAssistant) -> None:
         le seul contrat configuré ; sinon une erreur explicite (on n'envoie
         jamais le même index à plusieurs compteurs).
         """
+        _LOGGER.debug("_register_services.async_saisir_index: entrée | call=%s", resumer(call))
         index = int(call.data["index"])
         date_releve = date.today()
         raw_date = call.data.get("date_releve")
@@ -108,6 +124,7 @@ def _register_services(hass: HomeAssistant) -> None:
                 if cible
                 else "Aucun contrat Besançon et moi actif"
             )
+            _LOGGER.debug("_register_services.async_saisir_index: sortie par HomeAssistantError")
             raise HomeAssistantError(msg)
         if len(cibles) > 1:
             contrats = ", ".join(c.idcontrat for _, c in cibles)
@@ -115,6 +132,7 @@ def _register_services(hass: HomeAssistant) -> None:
                 "Plusieurs contrats sont configurés "
                 f"({contrats}) : précisez celui à viser avec le champ « contrat »"
             )
+            _LOGGER.debug("_register_services.async_saisir_index: sortie par HomeAssistantError")
             raise HomeAssistantError(msg)
         coordinator, contract = cibles[0]
         try:
@@ -127,9 +145,12 @@ def _register_services(hass: HomeAssistant) -> None:
             )
         except BesanconEmoiError as err:
             msg = f"Contrat {contract.idcontrat} : saisie refusée ({err})"
+            _LOGGER.debug(
+                "_register_services.async_saisir_index: sortie par HomeAssistantError | cause=%s", err
+            )
             raise HomeAssistantError(msg) from err
         await coordinator.async_request_refresh()
-        LOGGER.info("Relevé %s transmis pour le contrat %s", index, contract.idcontrat)
+        _LOGGER.info("Relevé %s transmis pour le contrat %s", index, contract.idcontrat)
 
     if not hass.services.has_service(DOMAIN, "saisir_index"):
         hass.services.async_register(
@@ -137,3 +158,4 @@ def _register_services(hass: HomeAssistant) -> None:
             "saisir_index",
             async_saisir_index,
         )
+    _LOGGER.debug("_register_services: sortie")

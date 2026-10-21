@@ -2,13 +2,9 @@
 
 from __future__ import annotations
 
-import logging
-
 DOMAIN = "besancon_emoi"
 MANUFACTURER = "Ville de Besançon / Grand Besançon Métropole"
 BASE_URL = "https://www.besancon-emoi.fr"
-
-LOGGER = logging.getLogger(__name__)
 
 CONF_EMAIL = "email"
 CONF_PASSWORD = "password"
