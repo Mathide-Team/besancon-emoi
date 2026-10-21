@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import contextlib
+import logging
 from datetime import date
 from pathlib import Path
 
@@ -9,6 +11,8 @@ import pytest
 from aiohttp import web
 from aiohttp.test_utils import TestClient, TestServer
 
+from custom_components.besancon_emoi import api as api_module
+from custom_components.besancon_emoi.const import LOGGER
 from custom_components.besancon_emoi.api import (
     BesanconEmoiAuthError,
     BesanconEmoiClient,
@@ -19,6 +23,14 @@ from custom_components.besancon_emoi.api import (
 FIXTURES = Path(__file__).parent / "fixtures"
 EMAIL = "exemple@fr.fr"
 PASSWORD = "secret"
+
+
+@pytest.fixture(autouse=True)
+def _raz_auth_debug():
+    """Réinitialise l'état « authentification bavarde » entre les tests."""
+    api_module._auth_debug_actif = True
+    yield
+    api_module._auth_debug_actif = True
 
 
 @pytest.fixture(autouse=True)
@@ -188,6 +200,61 @@ async def test_session_expiree() -> None:
         else:
             msg = "Une BesanconEmoiAuthError était attendue après expiration"
             raise AssertionError(msg)
+    finally:
+        await client.close()
+
+
+async def test_auth_bavarde_tant_que_connexion_echoue(caplog) -> None:
+    """Avant toute réussite, chaque étape d'authentification est visible au niveau INFO."""
+    client, api = await _make_client()
+    try:
+        with (
+            caplog.at_level(logging.INFO, logger=LOGGER.name),
+            contextlib.suppress(BesanconEmoiAuthError),
+        ):
+            await api.async_login(EMAIL, "faux")
+        messages = [r.getMessage() for r in caplog.records]
+        assert any("Connexion au portail" in m for m in messages)
+        assert any("mode bavard" in m for m in messages)
+        assert api_module._auth_debug_actif is True
+    finally:
+        await client.close()
+
+
+async def test_auth_silencieuse_apres_premiere_reussite(caplog) -> None:
+    """Après une connexion réussie, les étapes passent au niveau DEBUG."""
+    client, api = await _make_client()
+    try:
+        await api.async_login(EMAIL, PASSWORD)
+        assert api_module._auth_debug_actif is False
+        caplog.clear()
+        with caplog.at_level(logging.INFO, logger=LOGGER.name):
+            await api.async_login(EMAIL, PASSWORD)
+            infos = [r for r in caplog.records if r.levelno == logging.INFO]
+            assert not any("Connexion au portail" in r.getMessage() for r in infos)
+        caplog.clear()
+        with caplog.at_level(logging.DEBUG, logger=LOGGER.name):
+            await api.async_login(EMAIL, PASSWORD)
+            assert any("Connexion au portail" in r.getMessage() for r in caplog.records)
+    finally:
+        await client.close()
+
+
+async def test_auth_redevient_bavarde_apres_echec(caplog) -> None:
+    """Un échec après une réussite réactive la journalisation bavarde."""
+    client, api = await _make_client()
+    try:
+        await api.async_login(EMAIL, PASSWORD)
+        assert api_module._auth_debug_actif is False
+        with contextlib.suppress(BesanconEmoiAuthError):
+            await api.async_login(EMAIL, "faux")
+        assert api_module._auth_debug_actif is True
+        with (
+            caplog.at_level(logging.INFO, logger=LOGGER.name),
+            contextlib.suppress(BesanconEmoiAuthError),
+        ):
+            await api.async_login(EMAIL, "faux")
+            assert any("Connexion au portail" in r.getMessage() for r in caplog.records)
     finally:
         await client.close()
 
