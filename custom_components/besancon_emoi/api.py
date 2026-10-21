@@ -18,6 +18,7 @@ from bs4 import BeautifulSoup
 from .const import BASE_URL, LOGGER
 
 _LOGIN_FORM_MARKER = 'name="pwd"'
+
 _ABO_RE = re.compile(r"/prestations/eau/[a-z]+/abo/(\d+)")
 _IDCONTRAT_RE = re.compile(r"/prestations/eau/saisie/idcontrat/([\d-]+)")
 _DATE_RE = re.compile(r"\d{2}/\d{2}/\d{4}")
@@ -115,6 +116,20 @@ class BesanconEmoiClient:
         """Initialise le client avec une session aiohttp."""
         self._session = session
         self._base_url = base_url.rstrip("/")
+        # Journalisation de l'authentification (convention équipe
+        # Mathilde-Team) : bavarde (INFO) tant qu'aucune connexion n'a
+        # réussi pour ce compte — et après chaque nouvel échec —,
+        # silencieuse (DEBUG) ensuite. L'état est propre à ce client :
+        # la réussite d'un compte ne masque pas l'échec d'un autre.
+        self._auth_bavarde = True
+
+    def _auth_log(self, message: str, *args: Any) -> None:
+        """Trace une étape d'authentification : INFO tant que la connexion
+        n'a jamais réussi, DEBUG ensuite."""
+        if self._auth_bavarde:
+            LOGGER.info(message, *args)
+        else:
+            LOGGER.debug(message, *args)
 
     async def _request(self, method: str, path: str, **kwargs: Any) -> ClientResponse:
         """Effectue une requête et détecte une session expirée."""
@@ -165,18 +180,34 @@ class BesanconEmoiClient:
 
         Le portail répond 302 vers la page d'accueil en cas de succès et
         ré-affiche le formulaire de connexion sinon.
+
+        Les étapes sont tracées tant qu'aucune connexion n'a réussi
+        (convention équipe) : un échec de connexion laisse toujours
+        une trace exploitable dans le journal.
         """
-        resp = await self._request(
-            "POST",
-            "/",
-            data={"email": email, "pwd": password},
-            allow_redirects=False,
-        )
-        await resp.text()
-        if resp.status != 302:
-            raise BesanconEmoiAuthError("Identifiants refusés par le portail")
-        # Vérifie que la session est bien ouverte.
-        await self._get_text("/prestations/eau/contrats")
+        self._auth_log("Connexion au portail %s", self._base_url)
+        try:
+            resp = await self._request(
+                "POST",
+                "/",
+                data={"email": email, "pwd": password},
+                allow_redirects=False,
+            )
+            await resp.text()
+            if resp.status != 302:
+                raise BesanconEmoiAuthError("Identifiants refusés par le portail")
+            self._auth_log("Connexion acceptée par le portail")
+            # Vérifie que la session est bien ouverte.
+            await self._get_text("/prestations/eau/contrats")
+        except BesanconEmoiError:
+            # Tout échec — identifiants, session, réseau, portail —
+            # maintient l'authentification bavarde pour les prochains essais.
+            self._auth_bavarde = True
+            LOGGER.warning("Échec de connexion : authentification maintenue en mode bavard")
+            raise
+        # Premier succès : l'authentification redevient silencieuse.
+        self._auth_bavarde = False
+        LOGGER.info("Connexion réussie : authentification repasse en mode silencieux (debug)")
 
     async def async_get_contracts(self) -> list[Contract]:
         """Liste les contrats d'eau (idcontrat, abo, dernier index).

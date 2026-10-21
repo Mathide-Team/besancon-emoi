@@ -143,6 +143,22 @@ uv run --only-group lint ruff check .
 uv run -p 3.13 --only-group test pytest --cov
 ```
 
+### Essayer hors de Home Assistant
+
+Le client du portail se teste sans Home Assistant (lecture seule :
+connexion, contrats, historique d'index, derniers prélèvements — aucune
+saisie de relevé) :
+
+```bash
+BESANCON_EMOI_EMAIL=... BESANCON_EMOI_PASSWORD=... \
+    uv run -p 3.13 --only-group test python scripts/tester_hors_ha.py
+```
+
+Sans variables d'environnement, les identifiants sont demandés au
+lancement. La journalisation de l'authentification reste bavarde (niveau
+INFO) tant qu'aucune connexion n'a réussi, puis redevient silencieuse
+(DEBUG) — et repasse en mode bavard au premier échec.
+
 ## Socle qualité Mathilde-Team
 
 Ce dépôt suit le [socle qualité de l'équipe](https://github.com/Mathilde-Team/.github/blob/main/SOCLE.md) :
