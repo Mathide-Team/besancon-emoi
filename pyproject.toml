@@ -29,6 +29,13 @@ select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF"]
 
 [tool.coverage.run]
 source = ["custom_components/besancon_emoi"]
+branch = true
+
+[tool.coverage.report]
+# Seuil bloquant de l'équipe (Mathilde-Team/.github#9) : lignes + branches.
+# Appliqué par `pytest --cov` (job Qualité de ci.yml).
+fail_under = 95
+show_missing = true
 
 [tool.uv]
 package = false  # intégration HA, pas un paquet Python publié
