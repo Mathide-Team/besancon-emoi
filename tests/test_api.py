@@ -12,13 +12,13 @@ from aiohttp import web
 from aiohttp.test_utils import TestClient, TestServer
 
 from custom_components.besancon_emoi import api as api_module
-from custom_components.besancon_emoi.const import LOGGER
 from custom_components.besancon_emoi.api import (
     BesanconEmoiAuthError,
     BesanconEmoiClient,
     BesanconEmoiError,
     WasteContract,
 )
+from custom_components.besancon_emoi.const import LOGGER
 
 FIXTURES = Path(__file__).parent / "fixtures"
 EMAIL = "exemple@fr.fr"
