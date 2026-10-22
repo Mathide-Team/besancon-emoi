@@ -1,6 +1,6 @@
 # Journal des versions
 
-## [Non publié]
+## [0.3.0] - 2026-10-22
 
 ### Ajouté
 - **Journal de debug complet** (#24, SOCLE §8) : chaque fonction de l'intégration trace son entrée (paramètres résumés ; courriel, mot de passe et session masqués) et chacune de ses sorties, et chaque exception interceptée est journalisée. Activation : `logger: logs: custom_components.besancon_emoi: debug`.
