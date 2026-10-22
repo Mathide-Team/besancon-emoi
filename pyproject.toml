@@ -1,6 +1,6 @@
 [project]
 name = "besancon-emoi"
-version = "0.1.0"
+version = "0.3.0"
 description = "Intégration Home Assistant pour le portail Besançon et moi (eau : factures, index, relevés)"
 requires-python = ">=3.13.2,<3.14"
 license = "MIT"
