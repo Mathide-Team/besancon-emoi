@@ -23,7 +23,7 @@ jobs:
         uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
 
       - name: Tag = version du manifest, notes tirées du CHANGELOG
-        run: uv run --no-project python scripts/notes_de_version.py "${GITHUB_REF_NAME}" > notes.md
+        run: uv run --no-project --with loguru==0.7.3 python scripts/notes_de_version.py "${GITHUB_REF_NAME}" > notes.md
 
       - name: Archive de l'intégration
         run: cd custom_components/besancon_emoi && uv run --no-project python -m zipfile -c ../../besancon_emoi.zip .

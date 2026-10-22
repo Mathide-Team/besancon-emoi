@@ -54,8 +54,8 @@ async def test_flux_identifiants_invalides(hass: HomeAssistant) -> None:
         assert result["errors"] == {"base": "invalid_auth"}
 
 
-async def test_flux_portail_indisponible(hass: HomeAssistant) -> None:
-    """Un portail inaccessible affiche une erreur."""
+async def test_flux_portail_indisponible(hass: HomeAssistant, caplog) -> None:
+    """Un portail inaccessible affiche une erreur et laisse une trace dans le journal."""
     result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": SOURCE_USER})
     with patch(
         "custom_components.besancon_emoi.config_flow.BesanconEmoiClient", autospec=True
@@ -66,6 +66,7 @@ async def test_flux_portail_indisponible(hass: HomeAssistant) -> None:
         )
         assert result["type"] is FlowResultType.FORM
         assert result["errors"] == {"base": "cannot_connect"}
+    assert any("Connexion impossible" in r.getMessage() for r in caplog.records)
 
 
 async def test_options(hass: HomeAssistant) -> None:

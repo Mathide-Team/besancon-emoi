@@ -117,6 +117,18 @@ Paramètres → Tableaux de bord → ouvrir un tableau de bord → ⋮ → Modif
 → ⋮ → Éditeur de configuration, puis coller le contenu du fichier comme
 nouvel élément de `views:`.
 
+## Diagnostic
+
+Pour suivre pas à pas la connexion au portail, la lecture des contrats et la saisie du relevé, activer le journal de debug dans `configuration.yaml` :
+
+```yaml
+logger:
+  logs:
+    custom_components.besancon_emoi: debug
+```
+
+Le courriel, le mot de passe et la session ne sont jamais écrits ; les autres paramètres sont résumés (tailles, clés, types, début des pages tronqué à 60 caractères).
+
 ## Limites
 
 - Le portail est un site web : toute évolution de son HTML peut casser
@@ -142,6 +154,22 @@ uv sync
 uv run --only-group lint ruff check .
 uv run -p 3.13 --only-group test pytest --cov
 ```
+
+### Essayer hors de Home Assistant
+
+Le client du portail se teste sans Home Assistant (lecture seule :
+connexion, contrats, historique d'index, derniers prélèvements — aucune
+saisie de relevé) :
+
+```bash
+BESANCON_EMOI_EMAIL=... BESANCON_EMOI_PASSWORD=... \
+    uv run -p 3.13 --only-group test python scripts/tester_hors_ha.py
+```
+
+Sans variables d'environnement, les identifiants sont demandés au
+lancement. La journalisation de l'authentification reste bavarde (niveau
+INFO) tant qu'aucune connexion n'a réussi, puis redevient silencieuse
+(DEBUG) — et repasse en mode bavard au premier échec.
 
 ## Socle qualité Mathilde-Team
 

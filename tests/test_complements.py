@@ -304,9 +304,11 @@ async def test_jour_de_semaine_different(hass: HomeAssistant) -> None:
     entry = MockConfigEntry(
         domain=DOMAIN,
         data={CONF_EMAIL: EMAIL, CONF_PASSWORD: PASSWORD},
-        options={CONF_AUTO_SUBMIT: True, CONF_SUBMIT_WEEKDAY: demain},
+        # Entité source configurée et valide : seul le jour empêche l'envoi.
+        options={CONF_AUTO_SUBMIT: True, CONF_SUBMIT_WEEKDAY: demain, CONF_INDEX_ENTITY: "sensor.index_eau"},
     )
     entry.add_to_hass(hass)
+    hass.states.async_set("sensor.index_eau", "325")
     with patch("custom_components.besancon_emoi.BesanconEmoiClient", autospec=True) as mock_client:
         instance = mock_client.return_value
         from tests.test_init import _contract_data

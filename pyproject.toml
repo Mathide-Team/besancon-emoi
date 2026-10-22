@@ -1,6 +1,6 @@
 [project]
 name = "besancon-emoi"
-version = "0.1.0"
+version = "0.3.0"
 description = "Intégration Home Assistant pour le portail Besançon et moi (eau : factures, index, relevés)"
 requires-python = ">=3.13.2,<3.14"
 license = "MIT"
@@ -11,6 +11,7 @@ test = [
     "beautifulsoup4>=4.12.2",
     "pypdf>=5.0.0",  # lecture du total TTC dans le PDF de facture
     "pytest-homeassistant-custom-component==0.13.316",  # Home Assistant 2026.2.3, Python 3.13
+    "loguru==0.7.3",  # scripts/ (SOCLE §8) ; même version que --with dans release.yml
 ]
 lint = ["ruff==0.17.1"]
 
@@ -29,6 +30,13 @@ select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF"]
 
 [tool.coverage.run]
 source = ["custom_components/besancon_emoi"]
+branch = true
+
+[tool.coverage.report]
+# Seuil bloquant de l'équipe (Mathilde-Team/.github#9) : lignes + branches.
+# Appliqué par `pytest --cov` (job Qualité de ci.yml).
+fail_under = 95
+show_missing = true
 
 [tool.uv]
 package = false  # intégration HA, pas un paquet Python publié
